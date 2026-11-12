@@ -2,9 +2,9 @@
   --bg: #fbfbf9;
   --ink: #161616;
   --muted: #8a8a86;
-  --name: #7e979a;          /* subtle dusty teal for the name */
+  --name: #111;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --script: "Pinyon Script", cursive;
+  --display: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
   --pad: clamp(14px, 2vw, 28px);
 }
 
@@ -41,10 +41,11 @@ a { color: inherit; text-decoration: none; }
 
 .name {
   display: block;
-  font-family: var(--script);
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: clamp(38px, 4vw, 60px);
+  font-family: var(--display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: -0.065em;
+  font-size: clamp(30px, 3vw, 46px);
   line-height: 0.8;
   color: var(--name);
   width: max-content;
