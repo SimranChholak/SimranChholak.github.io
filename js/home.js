@@ -13,10 +13,9 @@ const WORKS = [
   'assets/work/07.jpg',
   'assets/work/08.jpg',
   'assets/work/09.jpg',
-  'assets/work/10.jpg',
 ];
 
-const CARD_COUNT = 14;      // how many "pages" in the fan
+const CARD_COUNT = 9;       // how many "pages" in the fan
 const SPIN_SPEED = 12;      // degrees per second when the mouse is still
 
 /* ---------- build the fan ---------- */
