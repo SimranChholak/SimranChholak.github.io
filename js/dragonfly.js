@@ -248,9 +248,9 @@
   function bodyGrad(x0, y0, x1, y1, t) {
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
     const s = Math.sin(t) * 6;
-    g.addColorStop(0, `hsl(${182 + s}, 80%, 40%)`);
-    g.addColorStop(0.45, `hsl(${196 + s}, 88%, 27%)`);
-    g.addColorStop(1, `hsl(${212 + s}, 80%, 14%)`);
+    g.addColorStop(0, `hsl(${176 + s}, 95%, 55%)`);
+    g.addColorStop(0.45, `hsl(${192 + s}, 95%, 36%)`);
+    g.addColorStop(1, `hsl(${210 + s}, 90%, 20%)`);
     return g;
   }
 
@@ -266,38 +266,56 @@
 
   function drawWing(l, w, alpha, sheen) {
     if (l < 1) return;
+    // clear, glassy wing with an iridescent shimmer that shifts as it moves
     ctx.save();
     ctx.globalAlpha *= alpha;
     wingPath(l, w);
-    const g = ctx.createLinearGradient(0, 0, l, 0);
-    g.addColorStop(0, 'rgba(120,190,200,0.18)');
-    g.addColorStop(0.28, 'rgba(70,140,180,0.35)');
-    g.addColorStop(0.42, `hsla(${215 + sheen * 10}, 85%, 26%, 0.92)`);
-    g.addColorStop(0.75, `hsla(${222 + sheen * 8}, 90%, 16%, 0.96)`);
-    g.addColorStop(1, 'rgba(12,22,55,0.9)');
+    const g = ctx.createLinearGradient(0, -w * 0.5, l, w * 0.5);
+    const h = 190 + sheen * 40;
+    g.addColorStop(0, 'rgba(200,240,255,0.10)');
+    g.addColorStop(0.35, `hsla(${h}, 90%, 75%, 0.16)`);
+    g.addColorStop(0.6, `hsla(${h + 40}, 90%, 72%, 0.22)`);
+    g.addColorStop(0.85, `hsla(${h + 90}, 85%, 78%, 0.18)`);
+    g.addColorStop(1, 'rgba(220,245,255,0.14)');
     ctx.fillStyle = g;
     ctx.fill();
-    // veins
+
     ctx.clip();
-    ctx.lineWidth = Math.max(0.4, l / 220);
-    ctx.strokeStyle = `hsla(${200 + sheen * 20}, 90%, 70%, 0.28)`;
+    // moving light glint across the wing
+    const gx = (0.5 + 0.5 * Math.sin(sheen * 2.2)) * l;
+    const gl = ctx.createRadialGradient(gx, -w * 0.1, 0, gx, -w * 0.1, l * 0.35);
+    gl.addColorStop(0, 'rgba(255,255,255,0.45)');
+    gl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gl;
+    ctx.fillRect(0, -w, l * 1.1, w * 2);
+
+    // veins
+    ctx.lineWidth = Math.max(0.35, l / 260);
+    ctx.strokeStyle = 'rgba(30,70,100,0.42)';
     for (let i = -4; i <= 4; i++) {
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.quadraticCurveTo(l * 0.5, (i / 4) * w * 0.55, l * 1.05, (i / 4) * w * 0.48);
       ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(140,210,255,0.12)';
-    for (let i = 1; i < 14; i++) {
-      const x = (i / 14) * l;
+    ctx.strokeStyle = 'rgba(30,70,100,0.18)';
+    for (let i = 1; i < 18; i++) {
+      const x = (i / 18) * l;
       ctx.beginPath(); ctx.moveTo(x, -w); ctx.lineTo(x + l * 0.02, w); ctx.stroke();
     }
+    // small dark wing spot near the tip (pterostigma)
+    ctx.fillStyle = 'rgba(20,40,60,0.55)';
+    ctx.beginPath(); ctx.ellipse(l * 0.9, -w * 0.38, l * 0.04, w * 0.08, 0.2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // edge
+
+    // bright glassy rim
     ctx.save();
-    ctx.globalAlpha *= alpha * 0.6;
+    ctx.globalAlpha *= alpha;
     wingPath(l, w);
-    ctx.lineWidth = 0.7; ctx.strokeStyle = 'rgba(10,25,60,0.8)';
+    ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(40,90,120,0.55)';
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 0.5; ctx.strokeStyle = `hsla(${h}, 100%, 85%, 0.5)`;
     ctx.stroke();
     ctx.restore();
   }
@@ -317,9 +335,22 @@
     ctx.beginPath();
     ctx.moveTo(-len * 0.02, -w0 * 0.35);
     ctx.quadraticCurveTo(-len * 0.5, -w0 * 0.35 + bend * 0.4, -len * 0.98, bend - w1 * 0.3);
-    ctx.lineWidth = Math.max(0.6, w0 * 0.45);
-    ctx.strokeStyle = 'rgba(160,250,240,0.35)';
+    ctx.lineWidth = Math.max(0.6, w0 * 0.5);
+    ctx.strokeStyle = 'rgba(190,255,245,0.6)';
     ctx.stroke();
+    // a glint of light sliding along the body
+    const gp = ((t * 0.35) % 1.4) - 0.2;
+    if (gp > 0 && gp < 1) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const gx = -len * gp, gy = bend * (gp * gp * 0.6 + gp * 0.4) * 0.95;
+      const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, w0 * 3.5);
+      gg.addColorStop(0, 'rgba(220,255,250,0.9)');
+      gg.addColorStop(1, 'rgba(220,255,250,0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(gx, gy, w0 * 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
     // segments
     ctx.strokeStyle = 'rgba(5,25,40,0.3)';
     ctx.lineWidth = 0.5;
@@ -373,6 +404,8 @@
     g.addColorStop(0, '#7ff0c8'); g.addColorStop(0.5, '#139a8a'); g.addColorStop(1, '#0a4f5c');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.ellipse(L * 0.02, 0, L * 0.08, L * 0.045, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath(); ctx.ellipse(L * 0.035, -L * 0.018, L * 0.03, L * 0.01, 0, 0, Math.PI * 2); ctx.fill();
     // head + eyes
     ctx.fillStyle = '#0d5566';
     ctx.beginPath(); ctx.ellipse(L * 0.115, 0, L * 0.035, L * 0.05, 0, 0, Math.PI * 2); ctx.fill();
@@ -421,8 +454,8 @@
     const wl = L * 0.6, ww = L * 0.13;
     ctx.save();
     ctx.translate(-L * 0.01, -L * 0.04);
-    ctx.save(); ctx.rotate(Math.PI + 0.42 + open); drawWing(wl, ww, 0.9, Math.sin(t)); ctx.restore();
-    ctx.save(); ctx.rotate(Math.PI + 0.32 - open * 0.4); drawWing(wl * 0.98, ww, 0.95, Math.cos(t)); ctx.restore();
+    ctx.save(); ctx.rotate(Math.PI + 0.42 + open); drawWing(wl, ww, 1, Math.sin(t * 0.8)); ctx.restore();
+    ctx.save(); ctx.rotate(Math.PI + 0.32 - open * 0.4); drawWing(wl * 0.98, ww, 1, Math.cos(t * 0.8)); ctx.restore();
     ctx.restore();
 
     // thorax (metallic green with a bronze shoulder)
@@ -432,7 +465,9 @@
     ctx.beginPath(); ctx.ellipse(L * 0.01, 0, L * 0.085, L * 0.058, -0.25, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(190,120,80,0.55)';
     ctx.beginPath(); ctx.ellipse(-L * 0.01, -L * 0.04, L * 0.025, L * 0.012, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(200,255,235,0.5)'; ctx.lineWidth = 0.8;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath(); ctx.ellipse(L * 0.03, -L * 0.03, L * 0.028, L * 0.009, -0.25, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(200,255,235,0.6)'; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.ellipse(L * 0.01, -L * 0.005, L * 0.06, L * 0.03, -0.25, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
 
     // head
