@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simran Chholak — Multidisciplinary Experience Designer</title>
+  <meta name="description" content="Portfolio of Simran Chholak, multidisciplinary experience designer working across VR, installation, space, print and branding. Jaipur, Rajasthan.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Pinyon+Script&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="home">
+
+  <header class="topbar">
+    <a class="name" href="./" aria-label="Simran Chholak, home">Simran</a>
+
+    <nav class="nav nav-a">
+      <a href="./" class="active">Home</a>
+      <a href="#work">Work</a>
+    </nav>
+    <nav class="nav nav-b">
+      <a href="#about">About</a>
+      <a href="#contact">Contact</a>
+    </nav>
+
+    <div class="clock">
+      <span id="time">--:--:--</span>
+      <span>Jaipur, Rajasthan</span>
+    </div>
+  </header>
+
+  <main class="hero">
+    <span class="side side-left">Selected work</span>
+    <span class="side side-right">Vol. 01</span>
+
+    <div class="scene">
+      <div class="stage" id="stage"></div>
+      <div class="rotor" id="rotor"></div>
+    </div>
+  </main>
+
+  <canvas id="dragonfly" aria-hidden="true"></canvas>
+
+  <script src="js/home.js"></script>
+  <script src="js/dragonfly.js"></script>
+</body>
+</html>

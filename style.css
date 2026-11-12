@@ -1,0 +1,136 @@
+:root {
+  --bg: #fbfbf9;
+  --ink: #161616;
+  --muted: #8a8a86;
+  --name: #7e979a;          /* subtle dusty teal for the name */
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --script: "Pinyon Script", cursive;
+  --pad: clamp(14px, 2vw, 28px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Home page never scrolls — navigation is only through the top bar */
+body.home { overflow: hidden; overscroll-behavior: none; }
+
+a { color: inherit; text-decoration: none; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  align-items: start;
+  padding: var(--pad);
+  pointer-events: none;
+}
+.topbar > * { pointer-events: auto; }
+
+.name {
+  display: block;
+  font-family: var(--script);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: clamp(38px, 4vw, 60px);
+  line-height: 0.8;
+  color: var(--name);
+  width: max-content;
+}
+
+.nav { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.nav a { position: relative; width: max-content; }
+.nav a::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 1px; background: currentColor;
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .35s ease;
+}
+.nav a:hover::after, .nav a.active::after { transform: scaleX(1); }
+
+.clock {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  padding-top: 4px; text-align: right;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+}
+
+.side {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  color: var(--ink);
+}
+.side-left  { left: var(--pad); }
+.side-right { right: var(--pad); }
+
+.scene {
+  --cw: min(16vw, 25vh);
+  --ch: calc(var(--cw) * 1.25);
+  position: relative;
+  width: 0; height: 0;
+  perspective: 1600px;
+}
+
+/* invisible box the dragonfly uses to know where the images are */
+.stage {
+  position: absolute;
+  width: calc(var(--cw) * 2.2);
+  height: calc(var(--ch) * 1.5);
+  left: calc(var(--cw) * -1.1);
+  top: calc(var(--ch) * -0.75);
+  pointer-events: none;
+}
+
+.rotor {
+  position: absolute; left: 0; top: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.card {
+  position: absolute;
+  left: 0;
+  top: calc(var(--ch) / -2);
+  width: var(--cw);
+  height: var(--ch);
+  transform-origin: 0 50%;          /* every card hinges on the same spine */
+  backface-visibility: visible;
+  overflow: hidden;
+  background: #ddd;
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,.08);
+}
+.card img, .card video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  user-select: none; -webkit-user-drag: none;
+}
+
+/* ---------- Dragonfly layer ---------- */
+#dragonfly {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 720px) {
+  .topbar { grid-template-columns: 1fr auto auto; gap: 18px; }
+  .clock { grid-column: 1 / -1; align-items: flex-start; text-align: left; padding-top: 0; }
+  .scene { --cw: min(34vw, 24vh); }
+  .side { top: auto; bottom: var(--pad); transform: none; }
+}
