@@ -16,7 +16,7 @@ const WORKS = [
   'assets/work/11.jpg',
 ];
 
-const MEDIA_VERSION = 15;   // bump this number whenever you replace a file with the same name
+const MEDIA_VERSION = 16;   // bump this number whenever you replace a file with the same name
 const CARD_COUNT = WORKS.length;   // one page for each work
 const SPIN_SPEED = 16;      // degrees per second around the spine
 
@@ -35,6 +35,8 @@ for (let i = 0; i < CARD_COUNT; i++) {
       m = document.createElement('video');
       m.muted = true; m.loop = true; m.autoplay = true; m.playsInline = true;
       m.setAttribute('muted', ''); m.setAttribute('playsinline', '');
+      m.setAttribute('controlslist', 'nodownload noplaybackrate noremoteplayback');
+      m.disablePictureInPicture = true;
       m.preload = 'auto';
     } else {
       m = document.createElement('img');
@@ -98,3 +100,11 @@ const fmt = new Intl.DateTimeFormat('en-GB', {
 function tick() { timeEl.textContent = `${fmt.format(new Date())} IST`; }
 tick();
 setInterval(tick, 1000);
+
+/* ---------- protect the work: no right-click menu or drag-to-save on images and videos ---------- */
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.card, img, video')) e.preventDefault();
+});
+document.addEventListener('dragstart', (e) => {
+  if (e.target.closest('.card, img, video')) e.preventDefault();
+});
