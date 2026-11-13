@@ -5,7 +5,7 @@
    ============================================================ */
 const WORKS = [
   'assets/work/01.jpg',
-  'assets/work/02.mp4',
+  'assets/work/02.jpg',
   'assets/work/03.jpg',
   'assets/work/04.jpg',
   'assets/work/05.jpg',
@@ -16,7 +16,7 @@ const WORKS = [
   'assets/work/11.jpg',
 ];
 
-const MEDIA_VERSION = 13;   // bump this number whenever you replace a file with the same name
+const MEDIA_VERSION = 14;   // bump this number whenever you replace a file with the same name
 const CARD_COUNT = WORKS.length;   // one page for each work
 const SPIN_SPEED = 16;      // degrees per second around the spine
 
