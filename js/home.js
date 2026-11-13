@@ -28,30 +28,27 @@ for (let i = 0; i < CARD_COUNT; i++) {
   card.className = 'card';
   card.style.transform = `rotateY(${(i * 360) / CARD_COUNT}deg) translateX(var(--gap)) translateY(-50%)`;
 
-  let media;
-  if (/\.(mp4|webm|mov)(\?|$)/i.test(src)) {
-    media = document.createElement('video');
-    media.muted = true; media.loop = true; media.autoplay = true; media.playsInline = true;
-    media.setAttribute('muted', ''); media.setAttribute('playsinline', '');
-    media.preload = 'auto';
-    media.src = src;
-  } else {
-    media = document.createElement('img');
-    media.src = src;
-    media.alt = '';
-    media.draggable = false;
-    media.decoding = 'async';
-  }
-  // the photo keeps the file's own shape inside the Polaroid frame
-  const photo = document.createElement('div');
-  photo.className = 'photo';
-  const setShape = (w, h) => { if (w && h) photo.style.setProperty('--ar', (w / h).toFixed(4)); };
-  if (media.tagName === 'VIDEO') media.addEventListener('loadedmetadata', () => setShape(media.videoWidth, media.videoHeight));
-  else media.addEventListener('load', () => setShape(media.naturalWidth, media.naturalHeight));
-  photo.appendChild(media);
-  card.appendChild(photo);
+  const makeMedia = () => {
+    let m;
+    if (/\.(mp4|webm|mov)(\?|$)/i.test(src)) {
+      m = document.createElement('video');
+      m.muted = true; m.loop = true; m.autoplay = true; m.playsInline = true;
+      m.setAttribute('muted', ''); m.setAttribute('playsinline', '');
+      m.preload = 'auto';
+    } else {
+      m = document.createElement('img');
+      m.alt = '';
+      m.draggable = false;
+      m.decoding = 'async';
+    }
+    m.src = src;
+    return m;
+  };
+  const bg = makeMedia(); bg.className = 'bg'; bg.setAttribute('aria-hidden', 'true');
+  const fg = makeMedia(); fg.className = 'fg';
+  card.append(bg, fg);
   rotor.appendChild(card);
-  if (media.play) media.play().catch(() => {});
+  [bg, fg].forEach(m => m.play && m.play().catch(() => {}));
 }
 
 /* ---------- rotation + mouse ---------- */

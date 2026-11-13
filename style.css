@@ -108,27 +108,29 @@ a { color: inherit; text-decoration: none; }
   position: absolute;
   left: 0;
   top: 0;
-  /* each page sits inside a 4:5 (1080 × 1350) space */
+  /* every page is the same 4:5 (1080 × 1350) card */
   width: var(--cw);
   aspect-ratio: 4 / 5;
   transform-origin: 0 0;            /* every page hinges on the same spine */
   backface-visibility: visible;
-  display: flex; align-items: center; justify-content: flex-start;
-}
-/* the image / video at its original shape and colours, as large as fits — no frame, no filter */
-.photo {
-  --ar: 0.8;
-  position: relative;
-  width: min(var(--cw), calc(var(--cw) * 1.25 * var(--ar)));
-  aspect-ratio: var(--ar);
   overflow: hidden;
   border-radius: calc(var(--cw) * 0.02);
-  flex: none;
+  background: #1a1a1a;
 }
-.card img, .card video {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-  user-select: none; -webkit-user-drag: none;
+/* blurred copy of the same image/video fills any empty space in the card */
+.card .bg {
+  position: absolute; inset: -8%;
+  width: 116%; height: 116%;
+  object-fit: cover;
+  filter: blur(14px) brightness(0.9);
 }
+/* the real image/video: whole, original shape and colours */
+.card .fg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+}
+.card img, .card video { display: block; user-select: none; -webkit-user-drag: none; }
 
 /* ---------- Dragonfly layer ---------- */
 #dragonfly {
