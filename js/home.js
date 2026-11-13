@@ -17,8 +17,8 @@ const WORKS = [
   'assets/work/11.mp4',
 ];
 
-const MEDIA_VERSION = 2;   // bump this number whenever you replace a file with the same name
-const CARD_COUNT = 16;      // pages in the cluster (same as the reference)
+const MEDIA_VERSION = 3;   // bump this number whenever you replace a file with the same name
+const CARD_COUNT = 11;      // one page for each work
 const SPIN_SPEED = 16;      // degrees per second around the spine
 
 /* ---------- build the cluster ---------- */
