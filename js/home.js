@@ -90,6 +90,6 @@ const timeEl = document.getElementById('time');
 const fmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
 });
-function tick() { timeEl.textContent = `${fmt.format(new Date())} GMT+5:30`; }
+function tick() { timeEl.textContent = `${fmt.format(new Date())} IST`; }
 tick();
 setInterval(tick, 1000);
