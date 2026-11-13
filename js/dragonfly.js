@@ -1,10 +1,12 @@
 /* ============================================================
-   DRAGONFLY — a banded-demoiselle style dragonfly drawn in code.
-   • Flies in short darts and hovers, in any direction.
-   • Wanders the empty space, sometimes over the images.
+   DRAGONFLY — a banded demoiselle drawn in code.
+   • Flies in short darts and hovers, in any direction, and banks
+     into its turns.
+   • After a few seconds of flying it lands somewhere new each time:
+       – on the page itself (seen from above, wings folded)
+       – on a side of the screen (seen from the side)
+       – on top of one of the rotating cards — and rides along with it
    • Never lets the cursor touch it — it darts away.
-   • If it is near a corner when the cursor stops, it flies to the
-     nearest side and sits there in side profile.
    ============================================================ */
 (() => {
   const canvas = document.getElementById('dragonfly');
@@ -16,33 +18,38 @@
     DPR = Math.min(2, window.devicePixelRatio || 1);
     W = innerWidth; H = innerHeight;
     canvas.width = W * DPR; canvas.height = H * DPR;
-    S = Math.max(52, Math.min(92, Math.min(W, H) * 0.085));
+    S = Math.max(54, Math.min(96, Math.min(W, H) * 0.09));
   }
   resize();
   addEventListener('resize', resize);
 
   /* ---------- tuning ---------- */
-  const IDLE_MS = 1100;          // cursor counts as "stopped" after this
-  const FLEE_R = () => S * 2.0;  // cursor closer than this → fly away
-  const TOP_SAFE = 110;          // keep wandering below the top bar
+  const FLEE_R = () => S * 2.0;        // cursor closer than this → fly away
+  const FLY_TIME = [2.5, 5];           // seconds of flying before it looks for a place to sit
+  const SIT_TIME = [3.5, 8];           // seconds it sits
+  const TOP_SAFE = 110;                // keep below the top bar
   const MARGIN = 40;
 
   /* ---------- helpers ---------- */
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
   const lerp = (a, b, t) => a + (b - a) * t;
+  const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+  const normAng = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
   function stageRect() {
     const r = stageEl.getBoundingClientRect();
     return { x: r.left, y: r.top, w: r.width, h: r.height };
   }
+  function centerOf(el) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
 
   /* ---------- cursor ---------- */
-  const mouse = { x: -9999, y: -9999, lastMove: -99999, seen: false };
+  const mouse = { x: -9999, y: -9999, seen: false };
   function onMove(e) {
     const p = e.touches ? e.touches[0] : e;
-    mouse.x = p.clientX; mouse.y = p.clientY;
-    mouse.lastMove = performance.now(); mouse.seen = true;
+    mouse.x = p.clientX; mouse.y = p.clientY; mouse.seen = true;
   }
   addEventListener('mousemove', onMove, { passive: true });
   addEventListener('touchstart', onMove, { passive: true });
@@ -54,38 +61,44 @@
     x: rand(W * 0.15, W * 0.3), y: rand(H * 0.6, H * 0.8),
     vx: 0, vy: 0,
     heading: -Math.PI / 4,
-    state: 'hover',        // hover | dart | land | perch | takeoff
+    bank: 0,                 // banking into turns (-1 … 1)
+    state: 'hover',          // hover | dart | toPerch | land | perch
     timer: 0.6,
-    tx: 0, ty: 0,           // dart target
+    flyLeft: rand(...FLY_TIME),
+    tx: 0, ty: 0,
     speed: 420,
-    view: 0,               // 0 = top view (flying), 1 = side view (perched)
-    perch: null,           // { x, y, rot, flip }
-    perchCooldown: 0,
+    view: 0,                 // 0 = flying drawing, 1 = sitting drawing
+    perch: null,             // where it sits (see choosePerch)
+    pose: null,              // current { x, y, rot, flip, valid } of the perch
+    lastPerch: { x: -999, y: -999 },
     wingPhase: 0,
-    clap: 0, clapT: rand(2, 5),
+    clap: 0, clapT: rand(1.5, 4), clapAmp: 0.5,
     t: 0,
-    wasIdle: false,
   };
 
-  function farFromCursor(x, y) {
-    return Math.hypot(x - mouse.x, y - mouse.y) > FLEE_R() * 1.8;
+  function farFromCursor(x, y, k = 1.8) {
+    return Math.hypot(x - mouse.x, y - mouse.y) > FLEE_R() * k;
+  }
+
+  function insideStage(x, y, pad = 30) {
+    const st = stageRect();
+    return x > st.x - pad && x < st.x + st.w + pad && y > st.y - pad && y < st.y + st.h + pad;
   }
 
   function pickTarget() {
     const st = stageRect();
     for (let i = 0; i < 30; i++) {
       let x, y;
-      if (Math.random() < 0.3) {          // sometimes over the images
+      if (Math.random() < 0.3) {                 // sometimes over the images
         x = rand(st.x + st.w * 0.15, st.x + st.w * 0.85);
         y = rand(st.y + st.h * 0.15, st.y + st.h * 0.85);
-      } else {                             // empty space
+      } else {                                    // empty space
         x = rand(MARGIN, W - MARGIN);
         y = rand(TOP_SAFE, H - MARGIN);
-        const pad = 30;
-        if (x > st.x - pad && x < st.x + st.w + pad && y > st.y - pad && y < st.y + st.h + pad) continue;
+        if (insideStage(x, y)) continue;
       }
       const d = Math.hypot(x - df.x, y - df.y);
-      if (d < 90 || d > Math.max(W, H) * 0.55) continue;   // short-ish darts
+      if (d < 90 || d > Math.max(W, H) * 0.55) continue;
       if (!farFromCursor(x, y)) continue;
       return { x, y };
     }
@@ -98,48 +111,75 @@
     df.state = 'dart';
   }
 
-  function flee() {
-    // dart directly away from the cursor, with a bit of sideways randomness
-    const a = Math.atan2(df.y - mouse.y, df.x - mouse.x) + rand(-0.6, 0.6);
-    const dist = rand(180, 300);
-    let x = clamp(df.x + Math.cos(a) * dist, MARGIN, W - MARGIN);
-    let y = clamp(df.y + Math.sin(a) * dist, TOP_SAFE * 0.6, H - MARGIN);
-    // if cornered, slip out sideways
-    if (Math.hypot(x - mouse.x, y - mouse.y) < FLEE_R() * 1.4) {
-      const b = a + (Math.random() < 0.5 ? 1.6 : -1.6);
-      x = clamp(df.x + Math.cos(b) * dist, MARGIN, W - MARGIN);
-      y = clamp(df.y + Math.sin(b) * dist, TOP_SAFE * 0.6, H - MARGIN);
-    }
-    if (df.state === 'perch' || df.state === 'land') takeoff();
-    startDart(x, y, rand(650, 850));
-    df.perchCooldown = 2.5;
+  /* ---------- places to sit ---------- */
+
+  // the top edge of a card, read from two tiny markers in its top corners
+  function cardPose(p) {
+    const a = centerOf(p.anc.l), b = centerOf(p.anc.r);
+    let vx = b.x - a.x, vy = b.y - a.y;
+    const len = Math.hypot(vx, vy);
+    let ang = Math.atan2(vy, vx);
+    let ux = p.u;
+    // seen from the back the edge runs right-to-left: sit on it the other way round
+    if (Math.abs(ang) > Math.PI / 2) { ang = normAng(ang + Math.PI); ux = 1 - p.u; }
+    const x = lerp(a.x, b.x, p.u), y = lerp(a.y, b.y, p.u);
+    const valid = len > S * 0.55 && Math.abs(ang) < 0.85 &&
+                  x > 20 && x < W - 20 && y > 30 && y < H - 20;
+    return { x, y, rot: ang, flip: p.flip, valid, ux };
   }
 
-  function nearCorner() {
-    const cx = df.x < W * 0.28 || df.x > W * 0.72;
-    const cy = df.y < H * 0.32 || df.y > H * 0.68;
-    return cx && cy;
+  function poseOf(p) {
+    if (p.type === 'card') return cardPose(p);
+    return { x: p.x, y: p.y, rot: p.rot, flip: p.flip, valid: true };
   }
 
   function choosePerch() {
-    const options = [
-      { d: df.x, x: 1, y: clamp(df.y, TOP_SAFE + 20, H - 60), rot: Math.PI / 2, flip: -1 },       // left wall
-      { d: W - df.x, x: W - 1, y: clamp(df.y, TOP_SAFE + 20, H - 60), rot: -Math.PI / 2, flip: 1 }, // right wall
-      { d: H - df.y, x: clamp(df.x, 80, W - 80), y: H - 1, rot: 0, flip: df.x > W / 2 ? -1 : 1 },  // bottom
-    ];
-    options.sort((a, b) => a.d - b.d);
-    return options[0];
+    const far = (x, y) => Math.hypot(x - df.lastPerch.x, y - df.lastPerch.y) > 220 && farFromCursor(x, y, 2.2);
+    const r = Math.random();
+
+    // 1) a card (about 4 in 10 landings)
+    const cards = window.CARD_ANCHORS || [];
+    if (r < 0.42 && cards.length) {
+      const order = cards.slice().sort(() => Math.random() - 0.5);
+      for (const c of order) {
+        const p = { type: 'card', anc: c, u: rand(0.45, 0.85), flip: Math.random() < 0.5 ? 1 : -1, view: 'side' };
+        const pose = cardPose(p);
+        if (pose.valid && far(pose.x, pose.y)) return p;
+      }
+    }
+    // 2) a side of the screen (about 1 in 4)
+    if (r < 0.67) {
+      for (let i = 0; i < 12; i++) {
+        const side = ['left', 'right', 'bottom'][Math.floor(Math.random() * 3)];
+        let p;
+        if (side === 'left')  p = { type: 'edge', x: 1, y: rand(TOP_SAFE + 30, H - 70), rot: Math.PI / 2, flip: -1 };
+        if (side === 'right') p = { type: 'edge', x: W - 1, y: rand(TOP_SAFE + 30, H - 70), rot: -Math.PI / 2, flip: 1 };
+        if (side === 'bottom') { const x = rand(90, W - 90); p = { type: 'edge', x, y: H - 1, rot: 0, flip: x > W / 2 ? -1 : 1 }; }
+        p.view = 'side';
+        if (far(p.x, p.y)) return p;
+      }
+    }
+    // 3) on the page itself, seen from above
+    for (let i = 0; i < 30; i++) {
+      const x = rand(MARGIN + 20, W - MARGIN - 20), y = rand(TOP_SAFE + 20, H - MARGIN - 20);
+      if (insideStage(x, y, 50) || !far(x, y)) continue;
+      return { type: 'surface', x, y, rot: rand(-Math.PI, Math.PI), flip: 1, view: 'top' };
+    }
+    return { type: 'surface', x: clamp(W - df.x, 80, W - 80), y: clamp(H - df.y, TOP_SAFE + 40, H - 60), rot: rand(-3, 3), flip: 1, view: 'top' };
+  }
+
+  // a point a little "above" the perch to fly in from
+  function approachPoint(p, pose) {
+    if (p.view === 'top') return { x: pose.x, y: pose.y };
+    const ux = Math.sin(pose.rot), uy = -Math.cos(pose.rot);     // the side's "up"
+    return { x: pose.x + ux * S * 0.8, y: pose.y + uy * S * 0.8 };
   }
 
   function goPerch() {
-    const p = choosePerch();
-    // approach point a little away from the wall
-    let ax = p.x, ay = p.y;
-    if (p.rot > 0.1) ax += S * 0.9;            // left wall → approach from the right
-    else if (p.rot < -0.1) ax -= S * 0.9;      // right wall → approach from the left
-    else ay -= S * 0.9;                         // bottom → approach from above
-    df.perch = p;
-    startDart(ax, ay, rand(380, 480));
+    df.perch = choosePerch();
+    df.pose = poseOf(df.perch);
+    const a = approachPoint(df.perch, df.pose);
+    startDart(a.x, a.y, rand(360, 460));
     df.state = 'toPerch';
   }
 
@@ -147,40 +187,49 @@
     df.state = 'hover';
     df.timer = 0.05;
     df.perch = null;
+    df.flyLeft = rand(...FLY_TIME);
+  }
+
+  function flee() {
+    const a = Math.atan2(df.y - mouse.y, df.x - mouse.x) + rand(-0.6, 0.6);
+    const dist = rand(180, 300);
+    let x = clamp(df.x + Math.cos(a) * dist, MARGIN, W - MARGIN);
+    let y = clamp(df.y + Math.sin(a) * dist, TOP_SAFE * 0.6, H - MARGIN);
+    if (Math.hypot(x - mouse.x, y - mouse.y) < FLEE_R() * 1.4) {   // cornered: slip out sideways
+      const b = a + (Math.random() < 0.5 ? 1.6 : -1.6);
+      x = clamp(df.x + Math.cos(b) * dist, MARGIN, W - MARGIN);
+      y = clamp(df.y + Math.sin(b) * dist, TOP_SAFE * 0.6, H - MARGIN);
+    }
+    if (df.state === 'perch' || df.state === 'land') {
+      if (df.pose && df.perch && df.perch.view === 'top') df.heading = df.pose.rot;
+      takeoff();
+    }
+    df.perch = null;
+    startDart(x, y, rand(650, 850));
+    df.flyLeft = rand(2, 3.5);
   }
 
   /* ---------- update ---------- */
-  function update(dt, now) {
+  function update(dt) {
     df.t += dt;
-    const idle = now - mouse.lastMove > IDLE_MS;
     const cursorD = Math.hypot(df.x - mouse.x, df.y - mouse.y);
-    df.perchCooldown = Math.max(0, df.perchCooldown - dt);
+    const prevHeading = df.heading;
 
-    // 1. never let the cursor touch it
-    if (mouse.seen && cursorD < FLEE_R()) {
-      if (!(df.state === 'dart' && df.speed > 600)) flee();
-    }
-
-    // 2. cursor just stopped: if near a corner, go sit on the nearest side
-    if (idle && !df.wasIdle && (df.state === 'hover' || df.state === 'dart') && nearCorner() && df.perchCooldown <= 0) {
-      goPerch();
-    }
-    df.wasIdle = idle;
+    // never let the cursor touch it
+    if (mouse.seen && cursorD < FLEE_R() && !(df.state === 'dart' && df.speed > 600)) flee();
 
     switch (df.state) {
       case 'hover': {
         df.vx *= Math.pow(0.02, dt); df.vy *= Math.pow(0.02, dt);
-        // tiny hovering drift
         df.vx += Math.sin(df.t * 7.3) * 30 * dt;
         df.vy += Math.cos(df.t * 5.1) * 30 * dt;
         df.timer -= dt;
+        df.flyLeft -= dt;
         if (df.timer <= 0) {
-          // while wandering idle, sometimes decide to rest if near a corner
-          if (idle && nearCorner() && df.perchCooldown <= 0 && Math.random() < 0.35) { goPerch(); break; }
+          if (df.flyLeft <= 0) { goPerch(); break; }          // time to sit somewhere
           if (farFromCursor(df.tx, df.ty)) startDart(df.tx, df.ty);
           else { const t = pickTarget(); startDart(t.x, t.y); }
         } else {
-          // turn to face the next direction slowly while hovering
           const want = Math.atan2(df.ty - df.y, df.tx - df.x);
           df.heading += angDiff(df.heading, want) * Math.min(1, dt * 1.5);
         }
@@ -188,40 +237,48 @@
       }
       case 'dart':
       case 'toPerch': {
+        df.flyLeft -= dt;
+        if (df.state === 'toPerch') {
+          // the perch may be moving (a card) — keep aiming at it
+          df.pose = poseOf(df.perch);
+          if (!df.pose.valid) { takeoff(); df.flyLeft = 0.6; break; }
+          const a = approachPoint(df.perch, df.pose);
+          df.tx = a.x; df.ty = a.y;
+        }
         const dx = df.tx - df.x, dy = df.ty - df.y;
         const d = Math.hypot(dx, dy);
         const want = Math.atan2(dy, dx);
         df.heading += angDiff(df.heading, want) * Math.min(1, dt * 9);
         const sp = df.speed * clamp(d / 120, 0.15, 1);
-        const ax = (Math.cos(df.heading) * sp - df.vx) * Math.min(1, dt * 6);
-        const ay = (Math.sin(df.heading) * sp - df.vy) * Math.min(1, dt * 6);
-        df.vx += ax; df.vy += ay;
+        df.vx += (Math.cos(df.heading) * sp - df.vx) * Math.min(1, dt * 6);
+        df.vy += (Math.sin(df.heading) * sp - df.vy) * Math.min(1, dt * 6);
         if (d < 14) {
-          if (df.state === 'toPerch' && df.perch) { df.state = 'land'; df.timer = 0; }
-          else { df.state = 'hover'; df.timer = rand(0.35, 1.6); const t = pickTarget(); df.tx = t.x; df.ty = t.y; }
+          if (df.state === 'toPerch') { df.state = 'land'; df.timer = 0; }
+          else { df.state = 'hover'; df.timer = rand(0.35, 1.4); const t = pickTarget(); df.tx = t.x; df.ty = t.y; }
         }
         break;
       }
       case 'land': {
-        const p = df.perch;
+        df.pose = poseOf(df.perch);
+        if (!df.pose.valid) { takeoff(); break; }
         df.timer += dt;
-        const k = Math.min(1, dt * 5);
-        df.x = lerp(df.x, p.x, k); df.y = lerp(df.y, p.y, k);
+        const k = Math.min(1, dt * 6);
+        df.x = lerp(df.x, df.pose.x, k); df.y = lerp(df.y, df.pose.y, k);
+        if (df.perch.view === 'top') df.heading += angDiff(df.heading, df.pose.rot) * k;
         df.vx = df.vy = 0;
-        if (df.timer > 0.45) { df.state = 'perch'; df.timer = rand(7, 14); }
+        if (df.timer > 0.45) { df.state = 'perch'; df.timer = rand(...SIT_TIME); df.lastPerch = { x: df.pose.x, y: df.pose.y }; }
         break;
       }
       case 'perch': {
+        df.pose = poseOf(df.perch);
         df.vx = df.vy = 0;
-        df.timer -= dt;
-        // fly off on its own after a while, or when the cursor starts moving nearby
-        const cursorActive = !idle && cursorD < FLEE_R() * 3;
-        if (df.timer <= 0 || cursorActive) {
-          takeoff();
-          df.perchCooldown = 4;
-          const t = pickTarget();
-          startDart(t.x, t.y);
+        if (!df.pose.valid) {                       // the card turned away — hop off
+          takeoff(); const t = pickTarget(); startDart(t.x, t.y); break;
         }
+        df.x = df.pose.x; df.y = df.pose.y;         // ride along with a moving card
+        if (df.perch.view === 'top') df.heading = df.pose.rot;
+        df.timer -= dt;
+        if (df.timer <= 0) { takeoff(); const t = pickTarget(); startDart(t.x, t.y); }
         break;
       }
     }
@@ -231,42 +288,39 @@
       df.x = clamp(df.x, 10, W - 10); df.y = clamp(df.y, 10, H - 10);
     }
 
-    // blend between flying (top) and sitting (side) drawings
-    const wantView = (df.state === 'perch' || (df.state === 'land' && df.timer > 0.15)) ? 1 : 0;
-    df.view += (wantView - df.view) * Math.min(1, dt * 10);
+    // bank into turns
+    const turn = dt > 0 ? angDiff(prevHeading, df.heading) / dt : 0;
+    df.bank += (clamp(turn * 0.25, -1, 1) - df.bank) * Math.min(1, dt * 6);
 
-    // wing speed: fast in flight, still when sitting
-    df.wingPhase += dt * (df.state === 'dart' || df.state === 'toPerch' ? 62 : 48);
+    const sitting = df.state === 'perch' || (df.state === 'land' && df.timer > 0.15);
+    df.view += ((sitting ? 1 : 0) - df.view) * Math.min(1, dt * 10);
 
-    // occasional slow wing "clap" when sitting, like real demoiselles
+    df.wingPhase += dt * (df.state === 'dart' || df.state === 'toPerch' ? 60 : 46);
+
+    // when sitting, now and then slowly open and close the wings
     df.clapT -= dt;
-    if (df.clapT <= 0) { df.clap = 1; df.clapT = rand(2.5, 6); }
-    df.clap = Math.max(0, df.clap - dt * 1.4);
+    if (df.clapT <= 0) { df.clap = 1; df.clapAmp = rand(0.25, 1); df.clapT = rand(2.5, 6); }
+    df.clap = Math.max(0, df.clap - dt * 0.9);
   }
 
   /* ---------- drawing ---------- */
-  /* Hawker-dragonfly look: clear wings with a dense dark vein mesh, silvery
-     frosted flecks and an amber leading edge; big blue eyes; bronze thorax
-     with turquoise spots; long dark abdomen with paired turquoise spots.
-     Wings are pre-drawn once into small images so they can be very detailed. */
-
-  const WING_RES = 4;            // sprite resolution multiplier
+  const WING_RES = 4;
   let foreSprite = null, hindSprite = null, spriteS = 0;
-
   function seeded(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 
-  // demoiselle-style paddle wing along +x, root at (0, 0)
+  // demoiselle paddle-shaped wing along +x, root at (0, 0)
   function wingOutline(c, l, w, hind) {
-    const b = hind ? 1.08 : 1;
+    const b = hind ? 1.06 : 1;
     c.beginPath();
-    c.moveTo(0, -w * 0.06);
-    c.bezierCurveTo(l * 0.2, -w * 0.14, l * 0.45, -w * 0.5 * b, l * 0.75, -w * 0.55 * b);
+    c.moveTo(0, -w * 0.05);
+    c.bezierCurveTo(l * 0.2, -w * 0.12, l * 0.45, -w * 0.5 * b, l * 0.75, -w * 0.55 * b);
     c.bezierCurveTo(l * 0.95, -w * 0.58 * b, l * 1.03, -w * 0.25, l * 1.0, w * 0.05);
     c.bezierCurveTo(l * 0.97, w * 0.38 * b, l * 0.8, w * 0.5 * b, l * 0.6, w * 0.45 * b);
-    c.bezierCurveTo(l * 0.38, w * 0.38 * b, l * 0.18, w * 0.14, 0, w * 0.06);
+    c.bezierCurveTo(l * 0.38, w * 0.38 * b, l * 0.18, w * 0.12, 0, w * 0.05);
     c.closePath();
   }
 
+  // pre-drawn, detailed wing: clear base → deep metallic blue with dark veins → darker tip
   function makeWingSprite(l, w, hind, seed) {
     const r = seeded(seed);
     const pad = 4;
@@ -277,68 +331,59 @@
     c.scale(WING_RES, WING_RES);
     c.translate(pad, w * 0.65 + pad);
 
-    // membrane: teal at the root → deep iridescent blue/violet → bronze-brown at the tip
     wingOutline(c, l, w, hind);
     const g = c.createLinearGradient(0, 0, l, 0);
-    g.addColorStop(0, 'rgba(60,170,170,0.55)');
-    g.addColorStop(0.12, 'rgba(40,60,190,0.85)');
-    g.addColorStop(0.45, 'rgba(48,40,200,0.95)');
-    g.addColorStop(0.72, 'rgba(38,22,110,0.96)');
-    g.addColorStop(0.9, 'rgba(70,40,30,0.95)');
-    g.addColorStop(1, 'rgba(95,60,40,0.9)');
+    g.addColorStop(0, 'rgba(170,220,235,0.25)');
+    g.addColorStop(0.16, 'rgba(120,190,225,0.35)');
+    g.addColorStop(0.3, 'rgba(25,120,200,0.9)');
+    g.addColorStop(0.6, 'rgba(14,82,170,0.96)');
+    g.addColorStop(0.88, 'rgba(10,40,95,0.97)');
+    g.addColorStop(1, 'rgba(8,28,60,0.95)');
     c.fillStyle = g; c.fill();
 
     c.save(); c.clip();
-    // brighter electric-blue band across the middle (iridescence)
+    // metallic sheen band
     const ib = c.createLinearGradient(0, -w * 0.5, 0, w * 0.5);
-    ib.addColorStop(0, 'rgba(90,80,255,0)');
-    ib.addColorStop(0.55, 'rgba(90,110,255,0.35)');
-    ib.addColorStop(1, 'rgba(90,80,255,0)');
-    c.fillStyle = ib; c.fillRect(l * 0.08, -w, l * 0.7, w * 2);
-
-    // fan of fine curved veins from the root
-    const n = 46;
+    ib.addColorStop(0, 'rgba(60,200,255,0)');
+    ib.addColorStop(0.45, 'rgba(70,200,255,0.28)');
+    ib.addColorStop(1, 'rgba(60,200,255,0)');
+    c.fillStyle = ib; c.fillRect(l * 0.25, -w, l * 0.6, w * 2);
+    // fan of dark curved veins
+    const n = 44;
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1);
       const yEnd = lerp(-w * 0.58, w * 0.5, f);
       const bow = (f - 0.5) * w * 0.25;
-      c.strokeStyle = `rgba(${140 + r() * 60},${150 + r() * 60},255,${0.18 + r() * 0.2})`;
-      c.lineWidth = Math.max(0.25, l / 520);
+      c.strokeStyle = `rgba(4,18,50,${0.45 + r() * 0.3})`;
+      c.lineWidth = Math.max(0.25, l / 480);
       c.beginPath();
       c.moveTo(l * 0.02, yEnd * 0.08);
       c.bezierCurveTo(l * 0.35, yEnd * 0.5 + bow, l * 0.7, yEnd * 0.95 + bow * 0.5, l * 1.02, yEnd * 0.95);
       c.stroke();
+      if (i % 3 === 0) {                          // a few bright veins catching the light
+        c.strokeStyle = 'rgba(140,220,255,0.25)';
+        c.stroke();
+      }
     }
-    // dense cross-veins (fine dark hatching between the long veins)
-    c.strokeStyle = 'rgba(10,5,40,0.35)';
+    // fine cross-veins
+    c.strokeStyle = 'rgba(4,18,50,0.28)';
     c.lineWidth = Math.max(0.2, l / 700);
-    for (let x = l * 0.1; x < l; x += l / 120) {
+    for (let x = l * 0.06; x < l; x += l / 110) {
       c.beginPath(); c.moveTo(x, -w * 0.6); c.lineTo(x + l * 0.012, w * 0.6); c.stroke();
     }
-    // main veins along the front edge (teal-green, like the photo)
-    c.strokeStyle = 'rgba(80,220,200,0.75)';
-    c.lineWidth = Math.max(0.5, l / 200);
-    for (const k of [0.02, 0.1]) {
-      c.beginPath(); c.moveTo(0, -w * k);
-      c.bezierCurveTo(l * 0.3, -w * (0.2 + k), l * 0.6, -w * (0.42 + k * 0.3), l * 0.95, -w * (0.45 + k * 0.4));
-      c.stroke();
-    }
-    // tiny sparkles
-    for (let s = 0; s < 40; s++) {
-      c.fillStyle = `rgba(255,${230 + r() * 25},${200 + r() * 55},${0.4 + r() * 0.5})`;
-      c.beginPath(); c.arc(r() * l, (r() - 0.5) * w, Math.max(0.3, l / 400) * (0.6 + r()), 0, Math.PI * 2); c.fill();
-    }
     // glossy highlight
-    const gl = c.createLinearGradient(0, -w * 0.6, l * 0.4, w * 0.4);
-    gl.addColorStop(0, 'rgba(255,255,255,0.22)');
-    gl.addColorStop(0.4, 'rgba(255,255,255,0)');
+    const gl = c.createLinearGradient(0, -w * 0.6, l * 0.5, w * 0.4);
+    gl.addColorStop(0, 'rgba(255,255,255,0.28)');
+    gl.addColorStop(0.45, 'rgba(255,255,255,0)');
     c.fillStyle = gl; c.fillRect(0, -w, l, w * 2);
     c.restore();
 
-    // thin dark rim with a faint bronze edge
+    // thin rim + metallic front vein
     wingOutline(c, l, w, hind);
-    c.lineWidth = Math.max(0.5, l / 260); c.strokeStyle = 'rgba(20,10,30,0.85)'; c.stroke();
-    c.lineWidth = Math.max(0.3, l / 500); c.strokeStyle = 'rgba(180,120,80,0.35)'; c.stroke();
+    c.lineWidth = Math.max(0.5, l / 260); c.strokeStyle = 'rgba(6,20,45,0.85)'; c.stroke();
+    c.strokeStyle = 'rgba(60,210,200,0.7)'; c.lineWidth = Math.max(0.5, l / 220);
+    c.beginPath(); c.moveTo(0, -w * 0.04);
+    c.bezierCurveTo(l * 0.3, -w * 0.22, l * 0.6, -w * 0.46, l * 0.9, -w * 0.5); c.stroke();
 
     return { cv, ox: pad, oy: w * 0.65 + pad };
   }
@@ -346,13 +391,12 @@
   function ensureSprites() {
     if (spriteS === S && foreSprite) return;
     spriteS = S;
-    foreSprite = makeWingSprite(S * 0.6, S * 0.2, false, 11);
-    hindSprite = makeWingSprite(S * 0.56, S * 0.21, true, 29);
+    foreSprite = makeWingSprite(S * 0.6, S * 0.19, false, 11);
+    hindSprite = makeWingSprite(S * 0.57, S * 0.2, true, 29);
   }
 
-  // draw a pre-rendered wing; sx = length scale (foreshortening when beating)
   function drawWingSprite(sp, sx, sy, alpha) {
-    if (sx <= 0.02) return;
+    if (Math.abs(sx) <= 0.02 || Math.abs(sy) <= 0.01) return;
     ctx.save();
     ctx.globalAlpha *= alpha;
     ctx.scale(sx, sy);
@@ -360,206 +404,235 @@
     ctx.restore();
   }
 
-  // long abdomen along -x from the origin, dark with paired turquoise spots
-  function drawAbdomen(len, w0, w1, bend, side) {
-    const segs = 10;
-    for (let i = 0; i < segs; i++) {
-      const f0 = i / segs, f1 = (i + 1) / segs;
-      const x0 = -len * f0, x1 = -len * f1;
-      const y0 = bend * f0 * f0, y1 = bend * f1 * f1;
-      // narrow "waist" at segment 3, like a hawker
-      const waist = i === 2 ? 0.7 : 1;
-      const ww = lerp(w0, w1, (f0 + f1) / 2) * waist;
-      ctx.save();
-      ctx.translate(x0, y0);
-      ctx.rotate(Math.atan2(y1 - y0, x1 - x0) + Math.PI);
-      const sl = Math.hypot(x1 - x0, y1 - y0);
-      // segment body
-      const g = ctx.createLinearGradient(0, -ww, 0, ww);
-      g.addColorStop(0, '#5a3a24'); g.addColorStop(0.45, '#2a1c14'); g.addColorStop(1, '#120c09');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.roundRect(-sl * 1.04, -ww, sl * 1.06, ww * 2, ww * 0.25); ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-sl * 1.0, -ww, Math.max(0.5, sl * 0.04), ww * 2);
-      // turquoise spots
-      if (i < segs - 1) {
-        ctx.fillStyle = '#4fd6e3';
-        if (side) {
-          ctx.beginPath(); ctx.ellipse(-sl * 0.35, -ww * 0.35, sl * 0.18, ww * 0.42, 0, 0, Math.PI * 2); ctx.fill();
-        } else {
-          for (const sgn of [-1, 1]) {
-            ctx.beginPath(); ctx.ellipse(-sl * 0.35, sgn * ww * 0.45, sl * 0.17, ww * 0.32, 0, 0, Math.PI * 2); ctx.fill();
-          }
-          ctx.fillStyle = 'rgba(120,230,240,0.6)';
-          ctx.beginPath(); ctx.ellipse(-sl * 0.75, 0, sl * 0.08, ww * 0.18, 0, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-      // sheen
-      ctx.fillStyle = 'rgba(255,230,200,0.18)';
-      ctx.fillRect(-sl * 0.95, -ww * 0.75, sl * 0.9, ww * 0.25);
-      ctx.restore();
+  // long, thin, metallic blue-green abdomen along -x from the origin
+  function drawAbdomen(len, w0, w1, bend) {
+    ctx.beginPath();
+    ctx.moveTo(0, -w0);
+    ctx.quadraticCurveTo(-len * 0.5, -w0 * 0.85 + bend * 0.4, -len * 0.9, bend - w1);
+    ctx.quadraticCurveTo(-len * 0.97, bend - w1 * 1.5, -len, bend - w1 * 0.6);   // slightly swollen tip
+    ctx.lineTo(-len, bend + w1 * 0.6);
+    ctx.quadraticCurveTo(-len * 0.97, bend + w1 * 1.5, -len * 0.9, bend + w1);
+    ctx.quadraticCurveTo(-len * 0.5, w0 * 0.85 + bend * 0.4, 0, w0);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, -w0, 0, w0);
+    const s = Math.sin(df.t * 0.8) * 6;
+    g.addColorStop(0, `hsl(${178 + s}, 85%, 58%)`);
+    g.addColorStop(0.45, `hsl(${188 + s}, 90%, 38%)`);
+    g.addColorStop(1, `hsl(${200 + s}, 85%, 20%)`);
+    ctx.fillStyle = g; ctx.fill();
+    // highlight line
+    ctx.beginPath();
+    ctx.moveTo(-len * 0.02, -w0 * 0.4);
+    ctx.quadraticCurveTo(-len * 0.5, -w0 * 0.4 + bend * 0.4, -len * 0.97, bend - w1 * 0.4);
+    ctx.lineWidth = Math.max(0.5, w0 * 0.4);
+    ctx.strokeStyle = 'rgba(190,255,250,0.55)'; ctx.stroke();
+    // segment rings
+    ctx.strokeStyle = 'rgba(0,40,55,0.35)'; ctx.lineWidth = 0.5;
+    for (let i = 1; i < 10; i++) {
+      const f = i / 10, x = -len * f, y = bend * (f * f * 0.6 + f * 0.4) * 0.95, ww = lerp(w0, w1, f);
+      ctx.beginPath(); ctx.moveTo(x, y - ww); ctx.lineTo(x, y + ww); ctx.stroke();
     }
-    // claspers
-    ctx.strokeStyle = '#2a1c14'; ctx.lineWidth = Math.max(0.7, w1 * 0.6);
-    const tx = -len, ty = bend;
-    for (const sgn of side ? [0] : [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - w1 * 2.6, ty + sgn * w1 * 0.9 + (side ? w1 * 0.4 : 0)); ctx.stroke();
-    }
+    // bright tip (as in the photos)
+    ctx.fillStyle = 'rgba(150,255,230,0.6)';
+    ctx.beginPath(); ctx.ellipse(-len * 0.95, bend, len * 0.04, w1 * 0.9, 0, 0, Math.PI * 2); ctx.fill();
   }
 
-  function drawEyeDome(x, y, rx, ry) {
-    const g = ctx.createRadialGradient(x - rx * 0.3, y - ry * 0.35, rx * 0.1, x, y, Math.max(rx, ry));
-    g.addColorStop(0, '#9cc8ff'); g.addColorStop(0.35, '#3d6fe0'); g.addColorStop(0.8, '#1d2f8a'); g.addColorStop(1, '#0d1440');
+  function drawEye(x, y, r) {
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#6f9fb8'); g.addColorStop(0.35, '#1b2b38'); g.addColorStop(1, '#05080c');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.beginPath(); ctx.ellipse(x - rx * 0.35, y - ry * 0.4, rx * 0.22, ry * 0.12, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.4, r * 0.18, 0, Math.PI * 2); ctx.fill();
   }
 
-  function drawThorax(L, side) {
-    const g = ctx.createRadialGradient(L * 0.02, -L * 0.02, 1, L * 0.02, 0, L * 0.09);
-    g.addColorStop(0, '#c99a62'); g.addColorStop(0.55, '#7a5532'); g.addColorStop(1, '#3b2614');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(L * 0.02, 0, L * 0.085, L * (side ? 0.06 : 0.052), side ? -0.25 : 0, 0, Math.PI * 2); ctx.fill();
-    // turquoise markings
-    ctx.fillStyle = '#5fdde8';
-    if (side) {
-      ctx.beginPath(); ctx.ellipse(L * 0.0, L * 0.005, L * 0.05, L * 0.009, -0.6, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(L * 0.045, -L * 0.01, L * 0.04, L * 0.008, -0.6, 0, Math.PI * 2); ctx.fill();
-    } else {
-      for (const sgn of [-1, 1]) {
-        ctx.beginPath(); ctx.ellipse(-L * 0.02, sgn * L * 0.028, L * 0.018, L * 0.008, sgn * 0.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(L * 0.04, sgn * L * 0.02, L * 0.012, L * 0.006, 0, 0, Math.PI * 2); ctx.fill();
-      }
+  function metalGreen(x0, y0, x1, y1) {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, '#9dfacb'); g.addColorStop(0.35, '#22c89a'); g.addColorStop(0.7, '#0c8a86'); g.addColorStop(1, '#064a52');
+    return g;
+  }
+
+  function drawLeg(pts, w) {
+    ctx.strokeStyle = '#3b434b'; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+    // little spines
+    ctx.save(); ctx.lineWidth = w * 0.45; ctx.strokeStyle = 'rgba(60,68,76,0.7)';
+    const [a, b] = [pts[pts.length - 2], pts[pts.length - 1]];
+    for (let i = 1; i < 5; i++) {
+      const f = i / 5, x = lerp(a[0], b[0], f), y = lerp(a[1], b[1], f);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - S * 0.012, y - S * 0.006); ctx.stroke();
     }
-    ctx.fillStyle = 'rgba(255,240,220,0.4)';
-    ctx.beginPath(); ctx.ellipse(L * 0.035, -L * 0.022, L * 0.03, L * 0.008, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
-  // ---- seen from above, head pointing +x ----
-  function drawTop(t, phase) {
+  // ---- FLYING, seen from above, head pointing +x ----
+  function drawFlying(t, phase, bank) {
     ensureSprites();
     const L = S;
-    // wings: hawker wings beat up/down → seen from above they shorten and lengthen
     const pairs = [
-      { sp: foreSprite, rx: L * 0.045, off: 0 },
-      { sp: hindSprite, rx: -L * 0.015, off: 1.7 },
+      { sp: foreSprite, rx: L * 0.045, off: 0, base: -0.06 },
+      { sp: hindSprite, rx: -L * 0.01, off: 1.8, base: 0.16 },
     ];
     for (const p of pairs) {
       const c = Math.cos(phase + p.off);
-      const len = 0.45 + 0.55 * Math.abs(c);
-      const sweep = 0.12 * Math.sin(phase + p.off);
+      const sweep = 0.22 * Math.sin(phase + p.off);
       for (const side of [-1, 1]) {
+        // banking: the wing on the inside of the turn looks shorter
+        const len = (0.5 + 0.5 * Math.abs(c)) * (1 - side * bank * 0.35);
         ctx.save();
-        ctx.translate(p.rx, side * L * 0.02);
-        ctx.rotate(side * (Math.PI / 2 + (p.sp === hindSprite ? 0.12 : -0.05)) - side * sweep);
+        ctx.translate(p.rx, side * L * 0.018);
+        ctx.rotate(side * (Math.PI / 2 + p.base) - side * sweep);
         drawWingSprite(p.sp, len, side, 1);
         ctx.restore();
       }
     }
     // abdomen
-    ctx.save(); ctx.translate(-L * 0.05, 0);
-    drawAbdomen(L * 0.72, L * 0.024, L * 0.018, Math.sin(t * 2) * L * 0.01, false);
+    ctx.save(); ctx.translate(-L * 0.045, 0);
+    drawAbdomen(L * 0.74, L * 0.018, L * 0.013, Math.sin(t * 2) * L * 0.01);
     ctx.restore();
-    drawThorax(L, false);
-    // head: two large blue eyes meeting in the middle, small face in front
-    drawEyeDome(L * 0.12, 0, L * 0.05, L * 0.062);
-    ctx.strokeStyle = 'rgba(10,20,60,0.6)'; ctx.lineWidth = Math.max(0.5, L / 160);
-    ctx.beginPath(); ctx.moveTo(L * 0.09, 0); ctx.lineTo(L * 0.165, 0); ctx.stroke();
-    ctx.fillStyle = '#4a7fd8';
-    ctx.beginPath(); ctx.ellipse(L * 0.172, 0, L * 0.014, L * 0.026, 0, 0, Math.PI * 2); ctx.fill();
+    // legs tucked under, just tips showing
+    for (const side of [-1, 1]) {
+      drawLeg([[L * 0.03, side * L * 0.02], [L * 0.06, side * L * 0.05], [L * 0.11, side * L * 0.055]], Math.max(0.5, L / 150));
+    }
+    // thorax
+    ctx.fillStyle = metalGreen(0, -L * 0.04, 0, L * 0.04);
+    ctx.beginPath(); ctx.ellipse(L * 0.02, 0, L * 0.07, L * 0.035, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(120,60,90,0.6)';
+    ctx.beginPath(); ctx.ellipse(-L * 0.005, 0, L * 0.02, L * 0.018, 0, 0, Math.PI * 2); ctx.fill();
+    // head: wide, with an eye on each side
+    ctx.fillStyle = '#0f7f86';
+    ctx.beginPath(); ctx.ellipse(L * 0.105, 0, L * 0.022, L * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+    drawEye(L * 0.108, -L * 0.045, L * 0.026);
+    drawEye(L * 0.108, L * 0.045, L * 0.026);
   }
 
-  // ---- seen from the side, head pointing +x, legs reaching down to y = S*0.22 ----
-  function drawSide(t, clap) {
+  // ---- SITTING on the page, seen from above: wings folded together over the back ----
+  function drawRestingTop(t, clap) {
     ensureSprites();
     const L = S;
-    const groundY = L * 0.22;
-    // folded wings, held together above the abdomen (seen from the side)
-    const open = Math.sin(clap * Math.PI) * 0.22;   // occasional slow open-close
-    const wingRoot = () => { ctx.translate(-L * 0.005, -L * 0.04); };
-    // far pair (behind body), a touch lower and darker
-    ctx.save(); wingRoot(); ctx.rotate(Math.PI + 0.2 + open * 0.5);
-    ctx.save(); ctx.filter = 'brightness(0.7)'; drawWingSprite(hindSprite, 1, -1, 0.95); ctx.restore(); ctx.restore();
-    // legs
-    ctx.strokeStyle = '#1a1410';
-    ctx.lineWidth = Math.max(0.6, L / 120);
-    ctx.lineCap = 'round';
-    const legs = [
-      { hx: L * 0.06, kx: L * 0.15, ky: -L * 0.04, fx: L * 0.2 },
-      { hx: L * 0.03, kx: L * 0.07, ky: -L * 0.05, fx: L * 0.09 },
-      { hx: 0, kx: -L * 0.05, ky: -L * 0.045, fx: -L * 0.08 },
-    ];
-    for (const lg of legs) {
-      ctx.beginPath();
-      ctx.moveTo(lg.hx, L * 0.03);
-      ctx.lineTo(lg.kx, L * 0.03 + lg.ky + L * 0.05);
-      ctx.lineTo(lg.fx, groundY);
-      ctx.stroke();
+    const open = Math.sin(clap * Math.PI) * df.clapAmp;
+    // legs splayed on the surface
+    const lw = Math.max(0.6, L / 130);
+    for (const side of [-1, 1]) {
+      drawLeg([[L * 0.05, side * L * 0.02], [L * 0.1, side * L * 0.07], [L * 0.17, side * L * 0.1]], lw);
+      drawLeg([[L * 0.02, side * L * 0.025], [L * 0.03, side * L * 0.09], [L * 0.05, side * L * 0.14]], lw);
+      drawLeg([[0, side * L * 0.025], [-L * 0.05, side * L * 0.08], [-L * 0.1, side * L * 0.12]], lw);
     }
-
-    // abdomen going back, very slightly down then level
-    ctx.save();
-    ctx.translate(-L * 0.06, 0);
-    ctx.rotate(0.06 + Math.sin(t * 1.2) * 0.01);
-    drawAbdomen(L * 0.74, L * 0.022, L * 0.016, -L * 0.02, true);
+    // abdomen
+    ctx.save(); ctx.translate(-L * 0.045, 0);
+    drawAbdomen(L * 0.74, L * 0.018, L * 0.013, 0);
     ctx.restore();
-
-    drawThorax(L, true);
-
-    // near pair (in front), lifted slightly and fanning open a little when it claps
-    ctx.save(); wingRoot(); ctx.rotate(Math.PI + 0.28 + open);
-    drawWingSprite(foreSprite, 1, -1, 0.97); ctx.restore();
-    ctx.save(); wingRoot(); ctx.rotate(Math.PI + 0.36 + open * 1.4);
-    drawWingSprite(foreSprite, 0.98, -1, 0.97); ctx.restore();
-
-    // head: big blue eye
-    drawEyeDome(L * 0.115, -L * 0.005, L * 0.045, L * 0.048);
-    ctx.fillStyle = '#4a7fd8';
-    ctx.beginPath(); ctx.ellipse(L * 0.155, L * 0.015, L * 0.015, L * 0.025, 0, 0, Math.PI * 2); ctx.fill();
+    // folded wings: held upright over the back, so from above they look narrow;
+    // they part slightly when it slowly opens them
+    for (const [sp, side, k] of [[hindSprite, -1, 0.9], [hindSprite, 1, 0.9], [foreSprite, -1, 1], [foreSprite, 1, 1]]) {
+      ctx.save();
+      ctx.translate(-L * 0.005, side * L * 0.006);
+      ctx.rotate(Math.PI + side * (0.04 + open * 0.35 * k));
+      drawWingSprite(sp, 1, side * (0.22 + open * 0.5), 0.96);
+      ctx.restore();
+    }
+    // thorax + head
+    ctx.fillStyle = metalGreen(0, -L * 0.04, 0, L * 0.04);
+    ctx.beginPath(); ctx.ellipse(L * 0.02, 0, L * 0.07, L * 0.035, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath(); ctx.ellipse(L * 0.03, -L * 0.012, L * 0.03, L * 0.008, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0f7f86';
+    ctx.beginPath(); ctx.ellipse(L * 0.105, 0, L * 0.022, L * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+    drawEye(L * 0.108, -L * 0.045, L * 0.026);
+    drawEye(L * 0.108, L * 0.045, L * 0.026);
   }
 
-  function drawShadow(x, y, rot, flying) {
+  // ---- SITTING on an edge, seen from the side: head +x, feet reach y = S * 0.26 ----
+  function drawRestingSide(t, clap) {
+    ensureSprites();
+    const L = S;
+    const groundY = L * 0.26;
+    const open = Math.sin(clap * Math.PI) * df.clapAmp;
+    const root = () => ctx.translate(-L * 0.005, -L * 0.035);
+
+    // far wings (behind the body) — the hind pair drops down a little when the wings open
+    ctx.save(); root(); ctx.rotate(Math.PI + 0.24 - open * 0.55);
+    ctx.save(); ctx.filter = 'brightness(0.72)'; drawWingSprite(hindSprite, 1, -1, 0.95); ctx.restore(); ctx.restore();
+
+    // long thin legs
+    const lw = Math.max(0.6, L / 120);
+    drawLeg([[L * 0.06, L * 0.025], [L * 0.15, -L * 0.01], [L * 0.21, groundY]], lw);
+    drawLeg([[L * 0.03, L * 0.03], [L * 0.07, L * 0.0], [L * 0.1, groundY]], lw);
+    drawLeg([[0, L * 0.03], [-L * 0.06, -L * 0.005], [-L * 0.09, groundY]], lw);
+
+    // abdomen, held out level behind
+    ctx.save(); ctx.translate(-L * 0.055, 0); ctx.rotate(0.05 + Math.sin(t * 1.2) * 0.01);
+    drawAbdomen(L * 0.75, L * 0.017, L * 0.012, -L * 0.012);
+    ctx.restore();
+
+    // thorax: metallic green with a bronze shoulder
+    ctx.fillStyle = metalGreen(0, -L * 0.06, 0, L * 0.06);
+    ctx.beginPath(); ctx.ellipse(L * 0.015, 0, L * 0.08, L * 0.055, -0.25, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(220,130,120,0.6)';
+    ctx.beginPath(); ctx.ellipse(-L * 0.01, -L * 0.04, L * 0.022, L * 0.012, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath(); ctx.ellipse(L * 0.03, -L * 0.028, L * 0.028, L * 0.009, -0.25, 0, Math.PI * 2); ctx.fill();
+
+    // near wings (in front) — the fore pair lifts up when the wings open, like the photo
+    ctx.save(); root(); ctx.rotate(Math.PI + 0.3 + open * 0.75);
+    drawWingSprite(foreSprite, 1, -1, 0.97); ctx.restore();
+    ctx.save(); root(); ctx.rotate(Math.PI + 0.34 + open * 1.05);
+    drawWingSprite(foreSprite, 0.98, -1, 0.97); ctx.restore();
+
+    // head + big dark eye
+    ctx.fillStyle = '#0f7f86';
+    ctx.beginPath(); ctx.ellipse(L * 0.1, L * 0.008, L * 0.026, L * 0.034, 0, 0, Math.PI * 2); ctx.fill();
+    drawEye(L * 0.112, -L * 0.006, L * 0.036);
+  }
+
+  function drawShadow(x, y, rot, height) {
     ctx.save();
-    const off = flying ? S * 0.35 : S * 0.05;
-    ctx.translate(x + off * 0.4, y + off);
+    ctx.translate(x + height * 0.4, y + height);
     ctx.rotate(rot);
     const g = ctx.createRadialGradient(-S * 0.25, 0, 1, -S * 0.25, 0, S * 0.45);
-    g.addColorStop(0, `rgba(20,40,50,${flying ? 0.05 : 0.08})`);
+    g.addColorStop(0, `rgba(20,40,50,${height > S * 0.1 ? 0.05 : 0.1})`);
     g.addColorStop(1, 'rgba(20,40,50,0)');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(-S * 0.25, 0, S * 0.45, S * (flying ? 0.22 : 0.06), 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-S * 0.25, 0, S * 0.45, S * (height > S * 0.1 ? 0.22 : 0.09), 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
   function render() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, W, H);
-
     const t = df.t;
     const bob = df.state === 'hover' ? Math.sin(t * 9) * 1.5 : 0;
 
-    // flying view
+    // flying
     if (df.view < 0.99) {
-      drawShadow(df.x, df.y, df.heading, true);
+      drawShadow(df.x, df.y, df.heading, S * 0.35);
       ctx.save();
       ctx.globalAlpha = 1 - df.view;
       ctx.translate(df.x, df.y + bob);
       ctx.rotate(df.heading);
-      // motion-blur ghost of the wings
-      ctx.save(); ctx.globalAlpha *= 0.35; drawTop(t, df.wingPhase - 0.9); ctx.restore();
-      drawTop(t, df.wingPhase);
+      ctx.save(); ctx.globalAlpha *= 0.3; drawFlying(t, df.wingPhase - 0.9, df.bank); ctx.restore();   // wing blur
+      drawFlying(t, df.wingPhase, df.bank);
       ctx.restore();
     }
-    // sitting view
-    if (df.view > 0.01 && df.perch) {
-      const p = df.perch;
+    // sitting
+    if (df.view > 0.01 && df.perch && df.pose) {
+      const p = df.perch, pose = df.pose;
       ctx.save();
       ctx.globalAlpha = df.view;
-      ctx.translate(df.x, df.y);
-      ctx.rotate(p.rot);
-      ctx.scale(p.flip, 1);
-      ctx.translate(0, -S * 0.22);       // so the feet touch the edge
-      drawSide(t, df.clap);
+      if (p.view === 'top') {
+        drawShadow(df.x, df.y, df.heading, S * 0.04);
+        ctx.translate(df.x, df.y);
+        ctx.rotate(df.heading);
+        drawRestingTop(t, df.clap);
+      } else {
+        ctx.translate(df.x, df.y);
+        ctx.rotate(pose.rot);
+        ctx.scale(pose.flip, 1);
+        ctx.translate(0, -S * 0.26);           // feet on the edge
+        drawRestingSide(t, df.clap);
+      }
       ctx.restore();
     }
   }
@@ -570,7 +643,7 @@
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    update(dt, now);
+    update(dt);
     render();
     requestAnimationFrame(loop);
   }

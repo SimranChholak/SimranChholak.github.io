@@ -22,6 +22,7 @@ const SPIN_SPEED = 16;      // degrees per second around the spine
 
 /* ---------- build the cluster ---------- */
 const rotor = document.getElementById('rotor');
+window.CARD_ANCHORS = [];   // top-corner markers the dragonfly uses to sit on cards
 for (let i = 0; i < CARD_COUNT; i++) {
   const src = `${WORKS[i % WORKS.length]}?v=${MEDIA_VERSION}`;
   const card = document.createElement('div');
@@ -47,6 +48,10 @@ for (let i = 0; i < CARD_COUNT; i++) {
   const bg = makeMedia(); bg.className = 'bg'; bg.setAttribute('aria-hidden', 'true');
   const fg = makeMedia(); fg.className = 'fg';
   card.append(bg, fg);
+  const ancL = document.createElement('i'); ancL.className = 'anc anc-l';
+  const ancR = document.createElement('i'); ancR.className = 'anc anc-r';
+  card.append(ancL, ancR);
+  window.CARD_ANCHORS.push({ card, l: ancL, r: ancR });
   rotor.appendChild(card);
   [bg, fg].forEach(m => m.play && m.play().catch(() => {}));
 }
