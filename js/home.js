@@ -17,7 +17,7 @@ const WORKS = [
   'assets/work/11.mp4',
 ];
 
-const MEDIA_VERSION = 3;   // bump this number whenever you replace a file with the same name
+const MEDIA_VERSION = 4;   // bump this number whenever you replace a file with the same name
 const CARD_COUNT = 11;      // one page for each work
 const SPIN_SPEED = 16;      // degrees per second around the spine
 
@@ -27,7 +27,7 @@ for (let i = 0; i < CARD_COUNT; i++) {
   const src = `${WORKS[i % WORKS.length]}?v=${MEDIA_VERSION}`;
   const card = document.createElement('div');
   card.className = 'card';
-  card.style.transform = `rotateY(${(i * 360) / CARD_COUNT}deg) translateX(var(--gap))`;
+  card.style.transform = `rotateY(${(i * 360) / CARD_COUNT}deg) translateX(var(--gap)) translateY(-50%)`;
 
   let media;
   if (/\.(mp4|webm|mov)(\?|$)/i.test(src)) {
@@ -43,6 +43,10 @@ for (let i = 0; i < CARD_COUNT; i++) {
     media.draggable = false;
     media.decoding = 'async';
   }
+  // give the card the exact shape of the file once we know its size
+  const setShape = (w, h) => { if (w && h) card.style.setProperty('--ar', (w / h).toFixed(4)); };
+  if (media.tagName === 'VIDEO') media.addEventListener('loadedmetadata', () => setShape(media.videoWidth, media.videoHeight));
+  else media.addEventListener('load', () => setShape(media.naturalWidth, media.naturalHeight));
   card.appendChild(media);
   rotor.appendChild(card);
   if (media.play) media.play().catch(() => {});

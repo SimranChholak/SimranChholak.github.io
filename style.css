@@ -105,23 +105,21 @@ a { color: inherit; text-decoration: none; }
 }
 
 .card {
+  --ar: 0.8;                        /* set per file from its real shape (width / height) */
   position: absolute;
   left: 0;
-  top: calc(var(--ch) / -2);
-  width: var(--cw);
-  height: var(--ch);
-  transform-origin: 0 50%;          /* every page hinges on the same spine */
+  top: 0;
+  /* each card keeps the file's own shape: tall, wide or square */
+  width: min(calc(var(--ch) * var(--ar)), calc(var(--cw) * 1.45));
+  aspect-ratio: var(--ar);
+  transform-origin: 0 0;            /* every page hinges on the same spine */
   backface-visibility: visible;
   overflow: hidden;
   border-radius: calc(var(--cw) * 0.025);
-  /* paper frame around each image / video */
-  background: #f3f0e9;
-  padding: calc(var(--cw) * 0.055);
-  box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.06);
+  background: #e9e6df;
 }
 .card img, .card video {
   width: 100%; height: 100%; object-fit: cover; display: block;
-  border-radius: calc(var(--cw) * 0.012);
   user-select: none; -webkit-user-drag: none;
   /* film / instant-photo look, applied to anything you add */
   filter: contrast(1.06) saturate(0.86) sepia(0.12) brightness(1.03);
