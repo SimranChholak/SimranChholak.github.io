@@ -320,7 +320,7 @@
     c.closePath();
   }
 
-  // pre-drawn, detailed wing: clear like glass, fine dark veins, soft rainbow sheen
+  // pre-drawn, detailed wing: clear base → deep metallic blue with dark veins → darker tip
   function makeWingSprite(l, w, hind, seed) {
     const r = seeded(seed);
     const pad = 4;
@@ -331,61 +331,60 @@
     c.scale(WING_RES, WING_RES);
     c.translate(pad, w * 0.65 + pad);
 
-    // almost clear membrane with the faintest smoky tint
     wingOutline(c, l, w, hind);
     const g = c.createLinearGradient(0, 0, l, 0);
-    g.addColorStop(0, 'rgba(200,225,235,0.16)');
-    g.addColorStop(0.5, 'rgba(210,225,235,0.08)');
-    g.addColorStop(1, 'rgba(160,170,180,0.12)');
+    g.addColorStop(0, 'rgba(170,220,235,0.25)');
+    g.addColorStop(0.16, 'rgba(120,190,225,0.35)');
+    g.addColorStop(0.3, 'rgba(25,120,200,0.9)');
+    g.addColorStop(0.6, 'rgba(14,82,170,0.96)');
+    g.addColorStop(0.88, 'rgba(10,40,95,0.97)');
+    g.addColorStop(1, 'rgba(8,28,60,0.95)');
     c.fillStyle = g; c.fill();
 
     c.save(); c.clip();
-    // soft rainbow (thin-film) sheen, like light on a real wing
-    const rb = c.createLinearGradient(0, -w * 0.6, l, w * 0.6);
-    rb.addColorStop(0.0, 'rgba(120,200,255,0)');
-    rb.addColorStop(0.25, 'rgba(120,200,255,0.14)');
-    rb.addColorStop(0.42, 'rgba(190,140,255,0.12)');
-    rb.addColorStop(0.58, 'rgba(255,200,140,0.12)');
-    rb.addColorStop(0.75, 'rgba(140,255,200,0.1)');
-    rb.addColorStop(1, 'rgba(140,255,200,0)');
-    c.fillStyle = rb; c.fillRect(0, -w, l, w * 2);
-    // long veins fanning from the root
-    const n = 22;
+    // metallic sheen band
+    const ib = c.createLinearGradient(0, -w * 0.5, 0, w * 0.5);
+    ib.addColorStop(0, 'rgba(60,200,255,0)');
+    ib.addColorStop(0.45, 'rgba(90,215,255,0.45)');
+    ib.addColorStop(1, 'rgba(60,200,255,0)');
+    c.fillStyle = ib; c.fillRect(l * 0.25, -w, l * 0.6, w * 2);
+    // fan of dark curved veins
+    const n = 44;
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1);
       const yEnd = lerp(-w * 0.58, w * 0.5, f);
       const bow = (f - 0.5) * w * 0.25;
-      c.strokeStyle = `rgba(25,35,45,${0.25 + r() * 0.2})`;
-      c.lineWidth = Math.max(0.25, l / 520);
+      c.strokeStyle = `rgba(4,18,50,${0.45 + r() * 0.3})`;
+      c.lineWidth = Math.max(0.25, l / 480);
       c.beginPath();
       c.moveTo(l * 0.02, yEnd * 0.08);
       c.bezierCurveTo(l * 0.35, yEnd * 0.5 + bow, l * 0.7, yEnd * 0.95 + bow * 0.5, l * 1.02, yEnd * 0.95);
       c.stroke();
-    }
-    // fine net of cross-veins
-    c.strokeStyle = 'rgba(25,35,45,0.12)';
-    c.lineWidth = Math.max(0.2, l / 900);
-    for (let x = l * 0.05; x < l; x += l / 70) {
-      for (let k = 0; k < 7; k++) {
-        const y = -w * 0.6 + (k + r()) * (w * 1.2 / 7);
-        c.beginPath(); c.moveTo(x, y); c.lineTo(x + l * 0.006 + r() * l * 0.006, y + w * 0.17); c.stroke();
+      if (i % 2 === 0) {                          // a few bright veins catching the light
+        c.strokeStyle = 'rgba(160,230,255,0.38)';
+        c.stroke();
       }
     }
-    // glassy highlight
+    // fine cross-veins
+    c.strokeStyle = 'rgba(4,18,50,0.28)';
+    c.lineWidth = Math.max(0.2, l / 700);
+    for (let x = l * 0.06; x < l; x += l / 110) {
+      c.beginPath(); c.moveTo(x, -w * 0.6); c.lineTo(x + l * 0.012, w * 0.6); c.stroke();
+    }
+    // glossy highlight
     const gl = c.createLinearGradient(0, -w * 0.6, l * 0.5, w * 0.4);
-    gl.addColorStop(0, 'rgba(255,255,255,0.35)');
-    gl.addColorStop(0.4, 'rgba(255,255,255,0)');
+    gl.addColorStop(0, 'rgba(255,255,255,0.5)');
+    gl.addColorStop(0.18, 'rgba(255,255,255,0.12)');
+    gl.addColorStop(0.45, 'rgba(255,255,255,0)');
     c.fillStyle = gl; c.fillRect(0, -w, l, w * 2);
     c.restore();
 
-    // thin dark rim, darker front vein and a small dark wing-spot near the tip
+    // thin rim + metallic front vein
     wingOutline(c, l, w, hind);
-    c.lineWidth = Math.max(0.45, l / 300); c.strokeStyle = 'rgba(20,28,36,0.55)'; c.stroke();
-    c.strokeStyle = 'rgba(20,28,36,0.85)'; c.lineWidth = Math.max(0.6, l / 200);
+    c.lineWidth = Math.max(0.5, l / 260); c.strokeStyle = 'rgba(6,20,45,0.85)'; c.stroke();
+    c.strokeStyle = 'rgba(60,210,200,0.7)'; c.lineWidth = Math.max(0.5, l / 220);
     c.beginPath(); c.moveTo(0, -w * 0.04);
     c.bezierCurveTo(l * 0.3, -w * 0.22, l * 0.6, -w * 0.46, l * 0.9, -w * 0.5); c.stroke();
-    c.fillStyle = 'rgba(25,30,35,0.85)';
-    c.beginPath(); c.ellipse(l * 0.9, -w * 0.43, l * 0.035, w * 0.055, -0.3, 0, Math.PI * 2); c.fill();
 
     return { cv, ox: pad, oy: w * 0.65 + pad };
   }
@@ -397,12 +396,19 @@
     hindSprite = makeWingSprite(S * 0.57, S * 0.2, true, 29);
   }
 
-  function drawWingSprite(sp, sx, sy, alpha) {
+  // shine (0…1): the wing flashes brighter as it catches the light
+  function drawWingSprite(sp, sx, sy, alpha, shine = 0.25) {
     if (Math.abs(sx) <= 0.02 || Math.abs(sy) <= 0.01) return;
     ctx.save();
     ctx.globalAlpha *= alpha;
     ctx.scale(sx, sy);
-    ctx.drawImage(sp.cv, -sp.ox, -sp.oy, sp.cv.width / WING_RES, sp.cv.height / WING_RES);
+    const w = sp.cv.width / WING_RES, h = sp.cv.height / WING_RES;
+    ctx.drawImage(sp.cv, -sp.ox, -sp.oy, w, h);
+    if (shine > 0.01) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha *= shine * 0.55;
+      ctx.drawImage(sp.cv, -sp.ox, -sp.oy, w, h);
+    }
     ctx.restore();
   }
 
@@ -478,15 +484,14 @@
       { sp: hindSprite, rx: -L * 0.01, off: 1.8, base: 0.16 },
     ];
     for (const p of pairs) {
-      const c = Math.cos(phase + p.off);
-      const sweep = 0.22 * Math.sin(phase + p.off);
+      const sweep = 0.26 * Math.sin(phase + p.off);
+      const shine = 0.15 + 0.85 * Math.pow(Math.max(0, Math.sin(phase + p.off + 0.6)), 3);
       for (const side of [-1, 1]) {
-        // banking: the wing on the inside of the turn looks shorter
-        const len = (0.5 + 0.5 * Math.abs(c)) * (1 - side * bank * 0.35);
+        // both wings of a pair always the same size, moving together
         ctx.save();
         ctx.translate(p.rx, side * L * 0.018);
         ctx.rotate(side * (Math.PI / 2 + p.base) - side * sweep);
-        drawWingSprite(p.sp, len, side, 1);
+        drawWingSprite(p.sp, 1, side, 1, shine);
         ctx.restore();
       }
     }
@@ -532,7 +537,7 @@
       ctx.save();
       ctx.translate(-L * 0.005, side * L * 0.006);
       ctx.rotate(Math.PI + side * (0.04 + open * 0.35 * k));
-      drawWingSprite(sp, 1, side * (0.22 + open * 0.5), 0.96);
+      drawWingSprite(sp, 1, side * (0.22 + open * 0.5), 0.96, 0.25 + 0.2 * Math.sin(t * 1.7));
       ctx.restore();
     }
     // thorax + head
@@ -556,7 +561,7 @@
 
     // far wings (behind the body) — the hind pair drops down a little when the wings open
     ctx.save(); root(); ctx.rotate(Math.PI + 0.24 - open * 0.55);
-    ctx.save(); ctx.filter = 'brightness(0.85)'; drawWingSprite(hindSprite, 1, -1, 0.95); ctx.restore(); ctx.restore();
+    ctx.save(); ctx.filter = 'brightness(0.75)'; drawWingSprite(hindSprite, 1, -1, 0.95); ctx.restore(); ctx.restore();
 
     // long thin legs
     const lw = Math.max(0.6, L / 120);
@@ -579,9 +584,9 @@
 
     // near wings (in front) — the fore pair lifts up when the wings open, like the photo
     ctx.save(); root(); ctx.rotate(Math.PI + 0.3 + open * 0.75);
-    drawWingSprite(foreSprite, 1, -1, 0.97); ctx.restore();
+    drawWingSprite(foreSprite, 1, -1, 0.97, 0.25 + 0.2 * Math.sin(t * 1.7)); ctx.restore();
     ctx.save(); root(); ctx.rotate(Math.PI + 0.34 + open * 1.05);
-    drawWingSprite(foreSprite, 0.98, -1, 0.97); ctx.restore();
+    drawWingSprite(foreSprite, 0.98, -1, 0.97, 0.25 + 0.2 * Math.sin(t * 1.7 + 1)); ctx.restore();
 
     // head + big dark eye
     ctx.fillStyle = '#0f7f86';
@@ -614,7 +619,7 @@
       ctx.globalAlpha = 1 - df.view;
       ctx.translate(df.x, df.y + bob);
       ctx.rotate(df.heading);
-      ctx.save(); ctx.globalAlpha *= 0.3; drawFlying(t, df.wingPhase - 0.9, df.bank); ctx.restore();   // wing blur
+      ctx.save(); ctx.globalAlpha *= 0.18; drawFlying(t, df.wingPhase - 0.9, df.bank); ctx.restore();   // wing blur
       drawFlying(t, df.wingPhase, df.bank);
       ctx.restore();
     }
