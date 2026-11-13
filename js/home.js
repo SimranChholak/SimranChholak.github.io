@@ -17,19 +17,20 @@ const WORKS = [
   'assets/work/11.mp4',
 ];
 
+const MEDIA_VERSION = 2;   // bump this number whenever you replace a file with the same name
 const CARD_COUNT = 16;      // pages in the cluster (same as the reference)
 const SPIN_SPEED = 16;      // degrees per second around the spine
 
 /* ---------- build the cluster ---------- */
 const rotor = document.getElementById('rotor');
 for (let i = 0; i < CARD_COUNT; i++) {
-  const src = WORKS[i % WORKS.length];
+  const src = `${WORKS[i % WORKS.length]}?v=${MEDIA_VERSION}`;
   const card = document.createElement('div');
   card.className = 'card';
   card.style.transform = `rotateY(${(i * 360) / CARD_COUNT}deg) translateX(var(--gap))`;
 
   let media;
-  if (/\.(mp4|webm|mov)$/i.test(src)) {
+  if (/\.(mp4|webm|mov)(\?|$)/i.test(src)) {
     media = document.createElement('video');
     media.muted = true; media.loop = true; media.autoplay = true; media.playsInline = true;
     media.setAttribute('muted', ''); media.setAttribute('playsinline', '');
