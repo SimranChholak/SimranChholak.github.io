@@ -16,7 +16,7 @@ const WORKS = [
   'assets/work/11.jpg',
 ];
 
-const MEDIA_VERSION = 11;   // bump this number whenever you replace a file with the same name
+const MEDIA_VERSION = 12;   // bump this number whenever you replace a file with the same name
 const CARD_COUNT = WORKS.length;   // one page for each work
 const SPIN_SPEED = 16;      // degrees per second around the spine
 
