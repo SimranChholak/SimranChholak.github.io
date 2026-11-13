@@ -245,180 +245,230 @@
   }
 
   /* ---------- drawing ---------- */
-  function bodyGrad(x0, y0, x1, y1, t) {
-    const g = ctx.createLinearGradient(x0, y0, x1, y1);
-    const s = Math.sin(t) * 6;
-    g.addColorStop(0, `hsl(${176 + s}, 95%, 55%)`);
-    g.addColorStop(0.45, `hsl(${192 + s}, 95%, 36%)`);
-    g.addColorStop(1, `hsl(${210 + s}, 90%, 20%)`);
-    return g;
+  /* Hawker-dragonfly look: clear wings with a dense dark vein mesh, silvery
+     frosted flecks and an amber leading edge; big blue eyes; bronze thorax
+     with turquoise spots; long dark abdomen with paired turquoise spots.
+     Wings are pre-drawn once into small images so they can be very detailed. */
+
+  const WING_RES = 3;            // sprite resolution multiplier
+  let foreSprite = null, hindSprite = null, spriteS = 0;
+
+  function seeded(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+
+  // wing outline along +x, root at (0, 0); hind = broader base
+  function wingOutline(c, l, w, hind) {
+    c.beginPath();
+    c.moveTo(0, -w * 0.12);
+    c.bezierCurveTo(l * 0.3, -w * 0.5, l * 0.7, -w * 0.5, l * 0.96, -w * 0.32);
+    c.bezierCurveTo(l * 1.02, -w * 0.2, l * 1.01, w * 0.12, l * 0.94, w * 0.2);
+    if (hind) c.bezierCurveTo(l * 0.65, w * 0.42, l * 0.3, w * 0.75, l * 0.06, w * 0.55);
+    else c.bezierCurveTo(l * 0.6, w * 0.32, l * 0.25, w * 0.4, l * 0.03, w * 0.22);
+    c.closePath();
   }
 
-  // a single demoiselle wing pointing along +x from (0,0), length l, width w
-  function wingPath(l, w) {
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.bezierCurveTo(l * 0.25, -w * 0.18, l * 0.55, -w * 0.62, l * 0.82, -w * 0.55);
-    ctx.bezierCurveTo(l * 1.02, -w * 0.48, l * 1.03, w * 0.32, l * 0.84, w * 0.42);
-    ctx.bezierCurveTo(l * 0.6, w * 0.5, l * 0.25, w * 0.2, 0, 0);
-    ctx.closePath();
+  function makeWingSprite(l, w, hind, seed) {
+    const r = seeded(seed);
+    const pad = 4;
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil((l * 1.05 + pad * 2) * WING_RES);
+    cv.height = Math.ceil((w * 1.6 + pad * 2) * WING_RES);
+    const c = cv.getContext('2d');
+    c.scale(WING_RES, WING_RES);
+    c.translate(pad, w * 0.8 + pad);
+
+    // smoky, clear membrane
+    wingOutline(c, l, w, hind);
+    const g = c.createLinearGradient(0, 0, l, 0);
+    g.addColorStop(0, 'rgba(70,55,40,0.30)');
+    g.addColorStop(0.25, 'rgba(60,55,50,0.14)');
+    g.addColorStop(1, 'rgba(40,40,45,0.10)');
+    c.fillStyle = g; c.fill();
+    c.save(); c.clip();
+
+    // longitudinal veins
+    c.lineWidth = Math.max(0.3, l / 260);
+    const longs = 9;
+    for (let i = 0; i < longs; i++) {
+      const f = i / (longs - 1);
+      const y0 = lerp(-w * 0.1, hind ? w * 0.45 : w * 0.18, f);
+      const y1 = lerp(-w * 0.3, w * 0.18, f);
+      c.strokeStyle = i === 0 ? 'rgba(190,130,60,0.95)' : 'rgba(55,38,25,0.55)';
+      c.lineWidth = i === 0 ? Math.max(0.6, l / 140) : Math.max(0.3, l / 300);
+      c.beginPath(); c.moveTo(0, y0 * 0.3);
+      c.quadraticCurveTo(l * 0.5, (y0 + y1) / 2, l * 1.02, y1); c.stroke();
+    }
+    // dense cross-vein mesh
+    c.strokeStyle = 'rgba(55,38,25,0.38)';
+    c.lineWidth = Math.max(0.25, l / 420);
+    for (let x = l * 0.04; x < l; x += l / 70) {
+      for (let k = 0; k < 6; k++) {
+        const y = -w * 0.5 + (k + r()) * (w * (hind ? 1.25 : 0.95) / 6);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + l * 0.004 + r() * l * 0.006, y + w * 0.16); c.stroke();
+      }
+    }
+    // silvery frosted flecks (stronger toward the edges and hind-wing base)
+    for (let n = 0; n < (hind ? 260 : 170); n++) {
+      const x = r() * l, y = (r() - 0.45) * w * (hind ? 1.3 : 1);
+      const edge = Math.abs(y) / w + (hind && x < l * 0.45 ? 0.35 : 0);
+      if (r() > 0.25 + edge) continue;
+      c.fillStyle = `rgba(235,245,250,${0.35 + r() * 0.5})`;
+      c.fillRect(x, y, l / 140 + r() * l / 70, Math.max(0.4, w / 60));
+    }
+    // turquoise tint near the root
+    const tg = c.createRadialGradient(0, 0, 0, 0, 0, l * 0.3);
+    tg.addColorStop(0, 'rgba(120,200,210,0.25)'); tg.addColorStop(1, 'rgba(120,200,210,0)');
+    c.fillStyle = tg; c.fillRect(0, -w, l * 0.35, w * 2);
+    c.restore();
+
+    // fine dark rim + pterostigma
+    wingOutline(c, l, w, hind);
+    c.lineWidth = Math.max(0.4, l / 300); c.strokeStyle = 'rgba(40,28,20,0.7)'; c.stroke();
+    c.fillStyle = 'rgba(80,50,25,0.9)';
+    c.beginPath(); c.ellipse(l * 0.88, -w * 0.36, l * 0.035, w * 0.05, -0.15, 0, Math.PI * 2); c.fill();
+
+    return { cv, ox: pad, oy: w * 0.8 + pad };
   }
 
-  function drawWing(l, w, alpha, sheen) {
-    if (l < 1) return;
-    // clear, glassy wing with an iridescent shimmer that shifts as it moves
+  function ensureSprites() {
+    if (spriteS === S && foreSprite) return;
+    spriteS = S;
+    foreSprite = makeWingSprite(S * 0.62, S * 0.16, false, 11);
+    hindSprite = makeWingSprite(S * 0.58, S * 0.2, true, 29);
+  }
+
+  // draw a pre-rendered wing; sx = length scale (foreshortening when beating)
+  function drawWingSprite(sp, sx, sy, alpha) {
+    if (sx <= 0.02) return;
     ctx.save();
     ctx.globalAlpha *= alpha;
-    wingPath(l, w);
-    const g = ctx.createLinearGradient(0, -w * 0.5, l, w * 0.5);
-    const h = 190 + sheen * 40;
-    g.addColorStop(0, 'rgba(200,240,255,0.10)');
-    g.addColorStop(0.35, `hsla(${h}, 90%, 75%, 0.16)`);
-    g.addColorStop(0.6, `hsla(${h + 40}, 90%, 72%, 0.22)`);
-    g.addColorStop(0.85, `hsla(${h + 90}, 85%, 78%, 0.18)`);
-    g.addColorStop(1, 'rgba(220,245,255,0.14)');
-    ctx.fillStyle = g;
-    ctx.fill();
-
-    ctx.clip();
-    // moving light glint across the wing
-    const gx = (0.5 + 0.5 * Math.sin(sheen * 2.2)) * l;
-    const gl = ctx.createRadialGradient(gx, -w * 0.1, 0, gx, -w * 0.1, l * 0.35);
-    gl.addColorStop(0, 'rgba(255,255,255,0.45)');
-    gl.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gl;
-    ctx.fillRect(0, -w, l * 1.1, w * 2);
-
-    // veins
-    ctx.lineWidth = Math.max(0.35, l / 260);
-    ctx.strokeStyle = 'rgba(30,70,100,0.42)';
-    for (let i = -4; i <= 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(l * 0.5, (i / 4) * w * 0.55, l * 1.05, (i / 4) * w * 0.48);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = 'rgba(30,70,100,0.18)';
-    for (let i = 1; i < 18; i++) {
-      const x = (i / 18) * l;
-      ctx.beginPath(); ctx.moveTo(x, -w); ctx.lineTo(x + l * 0.02, w); ctx.stroke();
-    }
-    // small dark wing spot near the tip (pterostigma)
-    ctx.fillStyle = 'rgba(20,40,60,0.55)';
-    ctx.beginPath(); ctx.ellipse(l * 0.9, -w * 0.38, l * 0.04, w * 0.08, 0.2, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-
-    // bright glassy rim
-    ctx.save();
-    ctx.globalAlpha *= alpha;
-    wingPath(l, w);
-    ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(40,90,120,0.55)';
-    ctx.stroke();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineWidth = 0.5; ctx.strokeStyle = `hsla(${h}, 100%, 85%, 0.5)`;
-    ctx.stroke();
+    ctx.scale(sx, sy);
+    ctx.drawImage(sp.cv, -sp.ox, -sp.oy, sp.cv.width / WING_RES, sp.cv.height / WING_RES);
     ctx.restore();
   }
 
-  function drawAbdomen(len, w0, w1, bend, t) {
-    // along -x from origin, with a gentle bend (bend = y offset at tip)
-    ctx.beginPath();
-    ctx.moveTo(0, -w0);
-    ctx.quadraticCurveTo(-len * 0.5, -w0 + bend * 0.4, -len, bend - w1);
-    ctx.lineTo(-len - w1 * 1.4, bend);
-    ctx.lineTo(-len, bend + w1);
-    ctx.quadraticCurveTo(-len * 0.5, w0 + bend * 0.4, 0, w0);
-    ctx.closePath();
-    ctx.fillStyle = bodyGrad(0, -w0, 0, w0, t);
-    ctx.fill();
-    // metallic highlight
-    ctx.beginPath();
-    ctx.moveTo(-len * 0.02, -w0 * 0.35);
-    ctx.quadraticCurveTo(-len * 0.5, -w0 * 0.35 + bend * 0.4, -len * 0.98, bend - w1 * 0.3);
-    ctx.lineWidth = Math.max(0.6, w0 * 0.5);
-    ctx.strokeStyle = 'rgba(190,255,245,0.6)';
-    ctx.stroke();
-    // a glint of light sliding along the body
-    const gp = ((t * 0.35) % 1.4) - 0.2;
-    if (gp > 0 && gp < 1) {
+  // long abdomen along -x from the origin, dark with paired turquoise spots
+  function drawAbdomen(len, w0, w1, bend, side) {
+    const segs = 10;
+    for (let i = 0; i < segs; i++) {
+      const f0 = i / segs, f1 = (i + 1) / segs;
+      const x0 = -len * f0, x1 = -len * f1;
+      const y0 = bend * f0 * f0, y1 = bend * f1 * f1;
+      // narrow "waist" at segment 3, like a hawker
+      const waist = i === 2 ? 0.7 : 1;
+      const ww = lerp(w0, w1, (f0 + f1) / 2) * waist;
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const gx = -len * gp, gy = bend * (gp * gp * 0.6 + gp * 0.4) * 0.95;
-      const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, w0 * 3.5);
-      gg.addColorStop(0, 'rgba(220,255,250,0.9)');
-      gg.addColorStop(1, 'rgba(220,255,250,0)');
-      ctx.fillStyle = gg;
-      ctx.beginPath(); ctx.arc(gx, gy, w0 * 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.translate(x0, y0);
+      ctx.rotate(Math.atan2(y1 - y0, x1 - x0) + Math.PI);
+      const sl = Math.hypot(x1 - x0, y1 - y0);
+      // segment body
+      const g = ctx.createLinearGradient(0, -ww, 0, ww);
+      g.addColorStop(0, '#5a3a24'); g.addColorStop(0.45, '#2a1c14'); g.addColorStop(1, '#120c09');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.roundRect(-sl * 1.04, -ww, sl * 1.06, ww * 2, ww * 0.25); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-sl * 1.0, -ww, Math.max(0.5, sl * 0.04), ww * 2);
+      // turquoise spots
+      if (i < segs - 1) {
+        ctx.fillStyle = '#4fd6e3';
+        if (side) {
+          ctx.beginPath(); ctx.ellipse(-sl * 0.35, -ww * 0.35, sl * 0.18, ww * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+        } else {
+          for (const sgn of [-1, 1]) {
+            ctx.beginPath(); ctx.ellipse(-sl * 0.35, sgn * ww * 0.45, sl * 0.17, ww * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.fillStyle = 'rgba(120,230,240,0.6)';
+          ctx.beginPath(); ctx.ellipse(-sl * 0.75, 0, sl * 0.08, ww * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      // sheen
+      ctx.fillStyle = 'rgba(255,230,200,0.18)';
+      ctx.fillRect(-sl * 0.95, -ww * 0.75, sl * 0.9, ww * 0.25);
       ctx.restore();
     }
-    // segments
-    ctx.strokeStyle = 'rgba(5,25,40,0.3)';
-    ctx.lineWidth = 0.5;
-    for (let i = 1; i < 10; i++) {
-      const f = i / 10, x = -len * f, y = bend * (f * f * 0.6 + f * 0.4) * 0.95;
-      const ww = lerp(w0, w1, f);
-      ctx.beginPath(); ctx.moveTo(x, y - ww); ctx.lineTo(x, y + ww); ctx.stroke();
+    // claspers
+    ctx.strokeStyle = '#2a1c14'; ctx.lineWidth = Math.max(0.7, w1 * 0.6);
+    const tx = -len, ty = bend;
+    for (const sgn of side ? [0] : [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - w1 * 2.6, ty + sgn * w1 * 0.9 + (side ? w1 * 0.4 : 0)); ctx.stroke();
     }
   }
 
-  function drawEye(x, y, r) {
-    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
-    g.addColorStop(0, '#5a7f9a');
-    g.addColorStop(0.35, '#13202c');
-    g.addColorStop(1, '#05080c');
+  function drawEyeDome(x, y, rx, ry) {
+    const g = ctx.createRadialGradient(x - rx * 0.3, y - ry * 0.35, rx * 0.1, x, y, Math.max(rx, ry));
+    g.addColorStop(0, '#9cc8ff'); g.addColorStop(0.35, '#3d6fe0'); g.addColorStop(0.8, '#1d2f8a'); g.addColorStop(1, '#0d1440');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.4, r * 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.ellipse(x - rx * 0.35, y - ry * 0.4, rx * 0.22, ry * 0.12, -0.4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawThorax(L, side) {
+    const g = ctx.createRadialGradient(L * 0.02, -L * 0.02, 1, L * 0.02, 0, L * 0.09);
+    g.addColorStop(0, '#c99a62'); g.addColorStop(0.55, '#7a5532'); g.addColorStop(1, '#3b2614');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(L * 0.02, 0, L * 0.085, L * (side ? 0.06 : 0.052), side ? -0.25 : 0, 0, Math.PI * 2); ctx.fill();
+    // turquoise markings
+    ctx.fillStyle = '#5fdde8';
+    if (side) {
+      ctx.beginPath(); ctx.ellipse(L * 0.0, L * 0.005, L * 0.05, L * 0.009, -0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(L * 0.045, -L * 0.01, L * 0.04, L * 0.008, -0.6, 0, Math.PI * 2); ctx.fill();
+    } else {
+      for (const sgn of [-1, 1]) {
+        ctx.beginPath(); ctx.ellipse(-L * 0.02, sgn * L * 0.028, L * 0.018, L * 0.008, sgn * 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(L * 0.04, sgn * L * 0.02, L * 0.012, L * 0.006, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.fillStyle = 'rgba(255,240,220,0.4)';
+    ctx.beginPath(); ctx.ellipse(L * 0.035, -L * 0.022, L * 0.03, L * 0.008, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   // ---- seen from above, head pointing +x ----
   function drawTop(t, phase) {
+    ensureSprites();
     const L = S;
-    // wings (behind the body)
-    const wl = L * 0.56, ww = L * 0.15;
+    // wings: hawker wings beat up/down → seen from above they shorten and lengthen
     const pairs = [
-      { rx: L * 0.05, off: 0 },          // fore wings
-      { rx: -L * 0.015, off: 1.9 },      // hind wings, out of phase
+      { sp: foreSprite, rx: L * 0.045, off: 0 },
+      { sp: hindSprite, rx: -L * 0.015, off: 1.7 },
     ];
     for (const p of pairs) {
-      const s = Math.sin(phase + p.off);
-      const sweep = 0.55 * s;                       // forward / back swing
-      const fore = 0.5 + 0.5 * Math.abs(Math.cos(phase + p.off)); // foreshortening
+      const c = Math.cos(phase + p.off);
+      const len = 0.45 + 0.55 * Math.abs(c);
+      const sweep = 0.12 * Math.sin(phase + p.off);
       for (const side of [-1, 1]) {
         ctx.save();
-        ctx.translate(p.rx, side * L * 0.025);
-        // wings angled slightly back, swinging forward and back as they beat
-        ctx.rotate(side * (Math.PI / 2 + 0.6) - side * sweep);
-        drawWing(wl * fore, ww, 0.95, Math.sin(t * 1.3 + side));
+        ctx.translate(p.rx, side * L * 0.02);
+        ctx.rotate(side * (Math.PI / 2 + (p.sp === hindSprite ? 0.12 : -0.05)) - side * sweep);
+        drawWingSprite(p.sp, len, side, 1);
         ctx.restore();
       }
     }
     // abdomen
-    ctx.save();
-    ctx.translate(-L * 0.04, 0);
-    drawAbdomen(L * 0.74, L * 0.019, L * 0.012, Math.sin(t * 2) * L * 0.015, t);
+    ctx.save(); ctx.translate(-L * 0.05, 0);
+    drawAbdomen(L * 0.72, L * 0.024, L * 0.018, Math.sin(t * 2) * L * 0.01, false);
     ctx.restore();
-    // thorax
-    const g = ctx.createRadialGradient(L * 0.01, -L * 0.02, 1, L * 0.02, 0, L * 0.08);
-    g.addColorStop(0, '#7ff0c8'); g.addColorStop(0.5, '#139a8a'); g.addColorStop(1, '#0a4f5c');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(L * 0.02, 0, L * 0.08, L * 0.045, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.beginPath(); ctx.ellipse(L * 0.035, -L * 0.018, L * 0.03, L * 0.01, 0, 0, Math.PI * 2); ctx.fill();
-    // head + eyes
-    ctx.fillStyle = '#0d5566';
-    ctx.beginPath(); ctx.ellipse(L * 0.115, 0, L * 0.035, L * 0.05, 0, 0, Math.PI * 2); ctx.fill();
-    drawEye(L * 0.125, -L * 0.045, L * 0.035);
-    drawEye(L * 0.125, L * 0.045, L * 0.035);
+    drawThorax(L, false);
+    // head: two large blue eyes meeting in the middle, small face in front
+    drawEyeDome(L * 0.12, 0, L * 0.05, L * 0.062);
+    ctx.strokeStyle = 'rgba(10,20,60,0.6)'; ctx.lineWidth = Math.max(0.5, L / 160);
+    ctx.beginPath(); ctx.moveTo(L * 0.09, 0); ctx.lineTo(L * 0.165, 0); ctx.stroke();
+    ctx.fillStyle = '#4a7fd8';
+    ctx.beginPath(); ctx.ellipse(L * 0.172, 0, L * 0.014, L * 0.026, 0, 0, Math.PI * 2); ctx.fill();
   }
 
-  // ---- seen from the side, head pointing +x, legs reaching down to y = S*0.17 ----
+  // ---- seen from the side, head pointing +x, legs reaching down to y = S*0.22 ----
   function drawSide(t, clap) {
+    ensureSprites();
     const L = S;
     const groundY = L * 0.22;
-    // legs (behind body)
-    ctx.strokeStyle = '#1a1f24';
+    // far-side wings (behind body), held out flat → seen nearly edge-on
+    const flick = Math.sin(clap * Math.PI) * 0.08;
+    ctx.save(); ctx.translate(L * 0.04, -L * 0.045); ctx.rotate(-0.12 - flick);
+    drawWingSprite(foreSprite, 0.9, 0.35, 0.8); ctx.restore();
+    ctx.save(); ctx.translate(-L * 0.01, -L * 0.04); ctx.rotate(Math.PI + 0.14 + flick);
+    drawWingSprite(hindSprite, 0.85, -0.35, 0.8); ctx.restore();
+
+    // legs
+    ctx.strokeStyle = '#1a1410';
     ctx.lineWidth = Math.max(0.6, L / 120);
     ctx.lineCap = 'round';
     const legs = [
@@ -432,48 +482,27 @@
       ctx.lineTo(lg.kx, L * 0.03 + lg.ky + L * 0.05);
       ctx.lineTo(lg.fx, groundY);
       ctx.stroke();
-      // tiny spines
-      ctx.save(); ctx.lineWidth *= 0.5;
-      for (let i = 1; i < 4; i++) {
-        const f = i / 4;
-        const x = lerp(lg.kx, lg.fx, f), y = lerp(L * 0.08 + lg.ky, groundY, f);
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - L * 0.008, y - L * 0.006); ctx.stroke();
-      }
-      ctx.restore();
     }
 
-    // abdomen going back and slightly up
+    // abdomen going back, very slightly down then level
     ctx.save();
-    ctx.translate(-L * 0.06, -L * 0.005);
-    ctx.rotate(0.12 + Math.sin(t * 1.2) * 0.01);
-    drawAbdomen(L * 0.74, L * 0.017, L * 0.011, -L * 0.02, t);
+    ctx.translate(-L * 0.06, 0);
+    ctx.rotate(0.06 + Math.sin(t * 1.2) * 0.01);
+    drawAbdomen(L * 0.74, L * 0.022, L * 0.016, -L * 0.02, true);
     ctx.restore();
 
-    // closed wings held above the abdomen; they part a little when "clapping"
-    const open = Math.sin(clap * Math.PI) * 0.35;
-    const wl = L * 0.6, ww = L * 0.13;
-    ctx.save();
-    ctx.translate(-L * 0.01, -L * 0.04);
-    ctx.save(); ctx.rotate(Math.PI + 0.42 + open); drawWing(wl, ww, 1, Math.sin(t * 0.8)); ctx.restore();
-    ctx.save(); ctx.rotate(Math.PI + 0.32 - open * 0.4); drawWing(wl * 0.98, ww, 1, Math.cos(t * 0.8)); ctx.restore();
-    ctx.restore();
+    drawThorax(L, true);
 
-    // thorax (metallic green with a bronze shoulder)
-    const g = ctx.createLinearGradient(0, -L * 0.06, 0, L * 0.06);
-    g.addColorStop(0, '#2fd39a'); g.addColorStop(0.45, '#0f9b86'); g.addColorStop(1, '#0a5560');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(L * 0.01, 0, L * 0.085, L * 0.058, -0.25, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(190,120,80,0.55)';
-    ctx.beginPath(); ctx.ellipse(-L * 0.01, -L * 0.04, L * 0.025, L * 0.012, -0.3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.beginPath(); ctx.ellipse(L * 0.03, -L * 0.03, L * 0.028, L * 0.009, -0.25, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(200,255,235,0.6)'; ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.ellipse(L * 0.01, -L * 0.005, L * 0.06, L * 0.03, -0.25, Math.PI * 1.1, Math.PI * 1.7); ctx.stroke();
+    // near-side wings (in front)
+    ctx.save(); ctx.translate(L * 0.04, -L * 0.05); ctx.rotate(-0.05 + flick);
+    drawWingSprite(foreSprite, 0.95, 0.4, 0.95); ctx.restore();
+    ctx.save(); ctx.translate(-L * 0.01, -L * 0.045); ctx.rotate(Math.PI + 0.06 - flick);
+    drawWingSprite(hindSprite, 0.9, -0.4, 0.95); ctx.restore();
 
-    // head
-    ctx.fillStyle = '#0e4f60';
-    ctx.beginPath(); ctx.ellipse(L * 0.105, L * 0.005, L * 0.03, L * 0.04, 0, 0, Math.PI * 2); ctx.fill();
-    drawEye(L * 0.12, -L * 0.005, L * 0.042);
+    // head: big blue eye
+    drawEyeDome(L * 0.115, -L * 0.005, L * 0.045, L * 0.048);
+    ctx.fillStyle = '#4a7fd8';
+    ctx.beginPath(); ctx.ellipse(L * 0.155, L * 0.015, L * 0.015, L * 0.025, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   function drawShadow(x, y, rot, flying) {
