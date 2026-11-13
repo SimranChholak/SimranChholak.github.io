@@ -320,7 +320,7 @@
     c.closePath();
   }
 
-  // pre-drawn, detailed wing: clear base → deep metallic blue with dark veins → darker tip
+  // pre-drawn, detailed wing: clear see-through membrane, veins in holographic rainbow colours
   function makeWingSprite(l, w, hind, seed) {
     const r = seeded(seed);
     const pad = 4;
@@ -330,61 +330,60 @@
     const c = cv.getContext('2d');
     c.scale(WING_RES, WING_RES);
     c.translate(pad, w * 0.65 + pad);
+    const holo = (f, a, light = 62) => `hsla(${(175 + f * 150) % 360}, 85%, ${light}%, ${a})`;   // pastel cyan → violet → pink
 
+    // see-through membrane with a faint holographic film
     wingOutline(c, l, w, hind);
-    const g = c.createLinearGradient(0, 0, l, 0);
-    g.addColorStop(0, 'rgba(170,220,235,0.25)');
-    g.addColorStop(0.16, 'rgba(120,190,225,0.35)');
-    g.addColorStop(0.3, 'rgba(25,120,200,0.9)');
-    g.addColorStop(0.6, 'rgba(14,82,170,0.96)');
-    g.addColorStop(0.88, 'rgba(10,40,95,0.97)');
-    g.addColorStop(1, 'rgba(8,28,60,0.95)');
+    const g = c.createLinearGradient(0, -w * 0.5, l, w * 0.5);
+    for (let k = 0; k <= 6; k++) g.addColorStop(k / 6, holo(k / 6, 0.07, 80));
     c.fillStyle = g; c.fill();
 
     c.save(); c.clip();
-    // metallic sheen band
-    const ib = c.createLinearGradient(0, -w * 0.5, 0, w * 0.5);
-    ib.addColorStop(0, 'rgba(60,200,255,0)');
-    ib.addColorStop(0.45, 'rgba(90,215,255,0.45)');
-    ib.addColorStop(1, 'rgba(60,200,255,0)');
-    c.fillStyle = ib; c.fillRect(l * 0.25, -w, l * 0.6, w * 2);
-    // fan of dark curved veins
-    const n = 44;
+    // long veins fanning from the root, each one shifting through rainbow hues
+    const n = 18;
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1);
       const yEnd = lerp(-w * 0.58, w * 0.5, f);
       const bow = (f - 0.5) * w * 0.25;
-      c.strokeStyle = `rgba(4,18,50,${0.45 + r() * 0.3})`;
-      c.lineWidth = Math.max(0.25, l / 480);
+      const vg = c.createLinearGradient(0, 0, l, 0);
+      vg.addColorStop(0, holo(f * 0.3, 0.55));
+      vg.addColorStop(0.35, holo(0.25 + f * 0.3, 0.6));
+      vg.addColorStop(0.7, holo(0.55 + f * 0.3, 0.6));
+      vg.addColorStop(1, holo(0.85 + f * 0.3, 0.55));
+      c.strokeStyle = vg;
+      c.lineWidth = Math.max(0.25, l / 520);
       c.beginPath();
       c.moveTo(l * 0.02, yEnd * 0.08);
       c.bezierCurveTo(l * 0.35, yEnd * 0.5 + bow, l * 0.7, yEnd * 0.95 + bow * 0.5, l * 1.02, yEnd * 0.95);
       c.stroke();
-      if (i % 2 === 0) {                          // a few bright veins catching the light
-        c.strokeStyle = 'rgba(160,230,255,0.38)';
-        c.stroke();
+    }
+    // inner net of fine cross-veins, also holographic
+    c.lineWidth = Math.max(0.2, l / 800);
+    for (let x = l * 0.05; x < l; x += l / 55) {
+      const fx = x / l;
+      for (let k = 0; k < 7; k++) {
+        const y = -w * 0.6 + (k + r()) * (w * 1.2 / 7);
+        c.strokeStyle = holo(fx + k * 0.05, 0.22);
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + l * 0.006 + r() * l * 0.006, y + w * 0.17); c.stroke();
       }
     }
-    // fine cross-veins
-    c.strokeStyle = 'rgba(4,18,50,0.28)';
-    c.lineWidth = Math.max(0.2, l / 700);
-    for (let x = l * 0.06; x < l; x += l / 110) {
-      c.beginPath(); c.moveTo(x, -w * 0.6); c.lineTo(x + l * 0.012, w * 0.6); c.stroke();
-    }
-    // glossy highlight
+    // glassy highlight
     const gl = c.createLinearGradient(0, -w * 0.6, l * 0.5, w * 0.4);
-    gl.addColorStop(0, 'rgba(255,255,255,0.5)');
-    gl.addColorStop(0.18, 'rgba(255,255,255,0.12)');
-    gl.addColorStop(0.45, 'rgba(255,255,255,0)');
+    gl.addColorStop(0, 'rgba(255,255,255,0.45)');
+    gl.addColorStop(0.35, 'rgba(255,255,255,0)');
     c.fillStyle = gl; c.fillRect(0, -w, l, w * 2);
     c.restore();
 
-    // thin rim + metallic front vein
+    // holographic rim + stronger front vein + small dark wing-spot near the tip
     wingOutline(c, l, w, hind);
-    c.lineWidth = Math.max(0.5, l / 260); c.strokeStyle = 'rgba(6,20,45,0.85)'; c.stroke();
-    c.strokeStyle = 'rgba(60,210,200,0.7)'; c.lineWidth = Math.max(0.5, l / 220);
+    const rg = c.createLinearGradient(0, 0, l, 0);
+    for (let k = 0; k <= 6; k++) rg.addColorStop(k / 6, holo(k / 6 + 0.1, 0.75, 55));
+    c.lineWidth = Math.max(0.5, l / 280); c.strokeStyle = rg; c.stroke();
+    c.lineWidth = Math.max(0.7, l / 180);
     c.beginPath(); c.moveTo(0, -w * 0.04);
     c.bezierCurveTo(l * 0.3, -w * 0.22, l * 0.6, -w * 0.46, l * 0.9, -w * 0.5); c.stroke();
+    c.fillStyle = 'rgba(30,30,45,0.8)';
+    c.beginPath(); c.ellipse(l * 0.9, -w * 0.43, l * 0.035, w * 0.055, -0.3, 0, Math.PI * 2); c.fill();
 
     return { cv, ox: pad, oy: w * 0.65 + pad };
   }
@@ -396,19 +395,15 @@
     hindSprite = makeWingSprite(S * 0.57, S * 0.2, true, 29);
   }
 
-  // shine (0…1): the wing flashes brighter as it catches the light
+  // shine (0…1): the hologram colours shift as the wing moves and catches light
   function drawWingSprite(sp, sx, sy, alpha, shine = 0.25) {
     if (Math.abs(sx) <= 0.02 || Math.abs(sy) <= 0.01) return;
     ctx.save();
     ctx.globalAlpha *= alpha;
     ctx.scale(sx, sy);
     const w = sp.cv.width / WING_RES, h = sp.cv.height / WING_RES;
+    ctx.filter = `hue-rotate(${Math.round(Math.sin(df.t * 0.7) * 35 + shine * 50)}deg)`;
     ctx.drawImage(sp.cv, -sp.ox, -sp.oy, w, h);
-    if (shine > 0.01) {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha *= shine * 0.55;
-      ctx.drawImage(sp.cv, -sp.ox, -sp.oy, w, h);
-    }
     ctx.restore();
   }
 
@@ -561,7 +556,7 @@
 
     // far wings (behind the body) — the hind pair drops down a little when the wings open
     ctx.save(); root(); ctx.rotate(Math.PI + 0.24 - open * 0.55);
-    ctx.save(); ctx.filter = 'brightness(0.75)'; drawWingSprite(hindSprite, 1, -1, 0.95); ctx.restore(); ctx.restore();
+    drawWingSprite(hindSprite, 1, -1, 0.85); ctx.restore();
 
     // long thin legs
     const lw = Math.max(0.6, L / 120);
