@@ -42,7 +42,14 @@ for (let i = 0; i < CARD_COUNT; i++) {
     media.draggable = false;
     media.decoding = 'async';
   }
-  card.appendChild(media);
+  // the photo keeps the file's own shape inside the Polaroid frame
+  const photo = document.createElement('div');
+  photo.className = 'photo';
+  const setShape = (w, h) => { if (w && h) photo.style.setProperty('--ar', (w / h).toFixed(4)); };
+  if (media.tagName === 'VIDEO') media.addEventListener('loadedmetadata', () => setShape(media.videoWidth, media.videoHeight));
+  else media.addEventListener('load', () => setShape(media.naturalWidth, media.naturalHeight));
+  photo.appendChild(media);
+  card.appendChild(photo);
   rotor.appendChild(card);
   if (media.play) media.play().catch(() => {});
 }
