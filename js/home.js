@@ -9,35 +9,42 @@ const WORKS = [
   'assets/work/03.jpg',
   'assets/work/04.jpg',
   'assets/work/05.jpg',
-  'assets/work/06.jpg',
+  'assets/work/06.mp4',
   'assets/work/07.jpg',
   'assets/work/08.jpg',
-  'assets/work/09.jpg',
+  'assets/work/09.mp4',
+  'assets/work/10.jpg',
+  'assets/work/11.mp4',
 ];
 
-const CARD_COUNT = 9;       // how many "pages" in the fan
-const SPIN_SPEED = 12;      // degrees per second when the mouse is still
+const CARD_COUNT = 16;      // pages in the cluster (same as the reference)
+const SPIN_SPEED = 16;      // degrees per second around the spine
 
-/* ---------- build the fan ---------- */
+/* ---------- build the cluster ---------- */
 const rotor = document.getElementById('rotor');
 for (let i = 0; i < CARD_COUNT; i++) {
   const src = WORKS[i % WORKS.length];
   const card = document.createElement('div');
   card.className = 'card';
-  card.style.transform = `rotateY(${(i * 360) / CARD_COUNT}deg)`;
+  card.style.transform = `rotateY(${(i * 360) / CARD_COUNT}deg) translateX(var(--gap))`;
 
   let media;
   if (/\.(mp4|webm|mov)$/i.test(src)) {
     media = document.createElement('video');
-    Object.assign(media, { src, muted: true, loop: true, autoplay: true, playsInline: true });
+    media.muted = true; media.loop = true; media.autoplay = true; media.playsInline = true;
+    media.setAttribute('muted', ''); media.setAttribute('playsinline', '');
+    media.preload = 'auto';
+    media.src = src;
   } else {
     media = document.createElement('img');
     media.src = src;
     media.alt = '';
     media.draggable = false;
+    media.decoding = 'async';
   }
   card.appendChild(media);
   rotor.appendChild(card);
+  if (media.play) media.play().catch(() => {});
 }
 
 /* ---------- rotation + mouse ---------- */
@@ -58,12 +65,17 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   spin += SPIN_SPEED * dt;
-  cur.x += (target.x - cur.x) * Math.min(1, dt * 3);
-  cur.y += (target.y - cur.y) * Math.min(1, dt * 3);
+  // soft, weighty follow — the cluster lags behind the cursor a little
+  const k = 1 - Math.pow(0.08, dt);
+  cur.x += (target.x - cur.x) * k;
+  cur.y += (target.y - cur.y) * k;
 
-  const turn = spin + cur.x * 120;          // mouse left/right turns the fan
-  const tilt = 10 - cur.y * 40;             // mouse up/down tilts it
-  const lean = -18 + cur.x * 10;
+  // cursor up/down tumbles the cluster forward/back (all the way to the
+  // edge-on "star" view at the top/bottom of the screen);
+  // cursor left/right leans the spine and turns it.
+  const tilt = 6 - cur.y * 170;
+  const lean = -cur.x * 70;
+  const turn = spin + cur.x * 90;
   rotor.style.transform = `rotateZ(${lean}deg) rotateX(${tilt}deg) rotateY(${turn}deg)`;
   requestAnimationFrame(frame);
 }
