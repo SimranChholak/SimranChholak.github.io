@@ -250,19 +250,20 @@
      with turquoise spots; long dark abdomen with paired turquoise spots.
      Wings are pre-drawn once into small images so they can be very detailed. */
 
-  const WING_RES = 3;            // sprite resolution multiplier
+  const WING_RES = 4;            // sprite resolution multiplier
   let foreSprite = null, hindSprite = null, spriteS = 0;
 
   function seeded(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 
-  // wing outline along +x, root at (0, 0); hind = broader base
+  // demoiselle-style paddle wing along +x, root at (0, 0)
   function wingOutline(c, l, w, hind) {
+    const b = hind ? 1.08 : 1;
     c.beginPath();
-    c.moveTo(0, -w * 0.12);
-    c.bezierCurveTo(l * 0.3, -w * 0.5, l * 0.7, -w * 0.5, l * 0.96, -w * 0.32);
-    c.bezierCurveTo(l * 1.02, -w * 0.2, l * 1.01, w * 0.12, l * 0.94, w * 0.2);
-    if (hind) c.bezierCurveTo(l * 0.65, w * 0.42, l * 0.3, w * 0.75, l * 0.06, w * 0.55);
-    else c.bezierCurveTo(l * 0.6, w * 0.32, l * 0.25, w * 0.4, l * 0.03, w * 0.22);
+    c.moveTo(0, -w * 0.06);
+    c.bezierCurveTo(l * 0.2, -w * 0.14, l * 0.45, -w * 0.5 * b, l * 0.75, -w * 0.55 * b);
+    c.bezierCurveTo(l * 0.95, -w * 0.58 * b, l * 1.03, -w * 0.25, l * 1.0, w * 0.05);
+    c.bezierCurveTo(l * 0.97, w * 0.38 * b, l * 0.8, w * 0.5 * b, l * 0.6, w * 0.45 * b);
+    c.bezierCurveTo(l * 0.38, w * 0.38 * b, l * 0.18, w * 0.14, 0, w * 0.06);
     c.closePath();
   }
 
@@ -270,70 +271,83 @@
     const r = seeded(seed);
     const pad = 4;
     const cv = document.createElement('canvas');
-    cv.width = Math.ceil((l * 1.05 + pad * 2) * WING_RES);
-    cv.height = Math.ceil((w * 1.6 + pad * 2) * WING_RES);
+    cv.width = Math.ceil((l * 1.06 + pad * 2) * WING_RES);
+    cv.height = Math.ceil((w * 1.3 + pad * 2) * WING_RES);
     const c = cv.getContext('2d');
     c.scale(WING_RES, WING_RES);
-    c.translate(pad, w * 0.8 + pad);
+    c.translate(pad, w * 0.65 + pad);
 
-    // smoky, clear membrane
+    // membrane: teal at the root → deep iridescent blue/violet → bronze-brown at the tip
     wingOutline(c, l, w, hind);
     const g = c.createLinearGradient(0, 0, l, 0);
-    g.addColorStop(0, 'rgba(70,55,40,0.30)');
-    g.addColorStop(0.25, 'rgba(60,55,50,0.14)');
-    g.addColorStop(1, 'rgba(40,40,45,0.10)');
+    g.addColorStop(0, 'rgba(60,170,170,0.55)');
+    g.addColorStop(0.12, 'rgba(40,60,190,0.85)');
+    g.addColorStop(0.45, 'rgba(48,40,200,0.95)');
+    g.addColorStop(0.72, 'rgba(38,22,110,0.96)');
+    g.addColorStop(0.9, 'rgba(70,40,30,0.95)');
+    g.addColorStop(1, 'rgba(95,60,40,0.9)');
     c.fillStyle = g; c.fill();
-    c.save(); c.clip();
 
-    // longitudinal veins
-    c.lineWidth = Math.max(0.3, l / 260);
-    const longs = 9;
-    for (let i = 0; i < longs; i++) {
-      const f = i / (longs - 1);
-      const y0 = lerp(-w * 0.1, hind ? w * 0.45 : w * 0.18, f);
-      const y1 = lerp(-w * 0.3, w * 0.18, f);
-      c.strokeStyle = i === 0 ? 'rgba(190,130,60,0.95)' : 'rgba(55,38,25,0.55)';
-      c.lineWidth = i === 0 ? Math.max(0.6, l / 140) : Math.max(0.3, l / 300);
-      c.beginPath(); c.moveTo(0, y0 * 0.3);
-      c.quadraticCurveTo(l * 0.5, (y0 + y1) / 2, l * 1.02, y1); c.stroke();
+    c.save(); c.clip();
+    // brighter electric-blue band across the middle (iridescence)
+    const ib = c.createLinearGradient(0, -w * 0.5, 0, w * 0.5);
+    ib.addColorStop(0, 'rgba(90,80,255,0)');
+    ib.addColorStop(0.55, 'rgba(90,110,255,0.35)');
+    ib.addColorStop(1, 'rgba(90,80,255,0)');
+    c.fillStyle = ib; c.fillRect(l * 0.08, -w, l * 0.7, w * 2);
+
+    // fan of fine curved veins from the root
+    const n = 46;
+    for (let i = 0; i < n; i++) {
+      const f = i / (n - 1);
+      const yEnd = lerp(-w * 0.58, w * 0.5, f);
+      const bow = (f - 0.5) * w * 0.25;
+      c.strokeStyle = `rgba(${140 + r() * 60},${150 + r() * 60},255,${0.18 + r() * 0.2})`;
+      c.lineWidth = Math.max(0.25, l / 520);
+      c.beginPath();
+      c.moveTo(l * 0.02, yEnd * 0.08);
+      c.bezierCurveTo(l * 0.35, yEnd * 0.5 + bow, l * 0.7, yEnd * 0.95 + bow * 0.5, l * 1.02, yEnd * 0.95);
+      c.stroke();
     }
-    // dense cross-vein mesh
-    c.strokeStyle = 'rgba(55,38,25,0.38)';
-    c.lineWidth = Math.max(0.25, l / 420);
-    for (let x = l * 0.04; x < l; x += l / 70) {
-      for (let k = 0; k < 6; k++) {
-        const y = -w * 0.5 + (k + r()) * (w * (hind ? 1.25 : 0.95) / 6);
-        c.beginPath(); c.moveTo(x, y); c.lineTo(x + l * 0.004 + r() * l * 0.006, y + w * 0.16); c.stroke();
-      }
+    // dense cross-veins (fine dark hatching between the long veins)
+    c.strokeStyle = 'rgba(10,5,40,0.35)';
+    c.lineWidth = Math.max(0.2, l / 700);
+    for (let x = l * 0.1; x < l; x += l / 120) {
+      c.beginPath(); c.moveTo(x, -w * 0.6); c.lineTo(x + l * 0.012, w * 0.6); c.stroke();
     }
-    // silvery frosted flecks (stronger toward the edges and hind-wing base)
-    for (let n = 0; n < (hind ? 260 : 170); n++) {
-      const x = r() * l, y = (r() - 0.45) * w * (hind ? 1.3 : 1);
-      const edge = Math.abs(y) / w + (hind && x < l * 0.45 ? 0.35 : 0);
-      if (r() > 0.25 + edge) continue;
-      c.fillStyle = `rgba(235,245,250,${0.35 + r() * 0.5})`;
-      c.fillRect(x, y, l / 140 + r() * l / 70, Math.max(0.4, w / 60));
+    // main veins along the front edge (teal-green, like the photo)
+    c.strokeStyle = 'rgba(80,220,200,0.75)';
+    c.lineWidth = Math.max(0.5, l / 200);
+    for (const k of [0.02, 0.1]) {
+      c.beginPath(); c.moveTo(0, -w * k);
+      c.bezierCurveTo(l * 0.3, -w * (0.2 + k), l * 0.6, -w * (0.42 + k * 0.3), l * 0.95, -w * (0.45 + k * 0.4));
+      c.stroke();
     }
-    // turquoise tint near the root
-    const tg = c.createRadialGradient(0, 0, 0, 0, 0, l * 0.3);
-    tg.addColorStop(0, 'rgba(120,200,210,0.25)'); tg.addColorStop(1, 'rgba(120,200,210,0)');
-    c.fillStyle = tg; c.fillRect(0, -w, l * 0.35, w * 2);
+    // tiny sparkles
+    for (let s = 0; s < 40; s++) {
+      c.fillStyle = `rgba(255,${230 + r() * 25},${200 + r() * 55},${0.4 + r() * 0.5})`;
+      c.beginPath(); c.arc(r() * l, (r() - 0.5) * w, Math.max(0.3, l / 400) * (0.6 + r()), 0, Math.PI * 2); c.fill();
+    }
+    // glossy highlight
+    const gl = c.createLinearGradient(0, -w * 0.6, l * 0.4, w * 0.4);
+    gl.addColorStop(0, 'rgba(255,255,255,0.22)');
+    gl.addColorStop(0.4, 'rgba(255,255,255,0)');
+    c.fillStyle = gl; c.fillRect(0, -w, l, w * 2);
     c.restore();
 
-    // fine dark rim + pterostigma
+    // thin dark rim with a faint bronze edge
     wingOutline(c, l, w, hind);
-    c.lineWidth = Math.max(0.4, l / 300); c.strokeStyle = 'rgba(40,28,20,0.7)'; c.stroke();
-    c.fillStyle = 'rgba(80,50,25,0.9)';
-    c.beginPath(); c.ellipse(l * 0.88, -w * 0.36, l * 0.035, w * 0.05, -0.15, 0, Math.PI * 2); c.fill();
+    c.lineWidth = Math.max(0.5, l / 260); c.strokeStyle = 'rgba(20,10,30,0.85)'; c.stroke();
+    c.lineWidth = Math.max(0.3, l / 500); c.strokeStyle = 'rgba(180,120,80,0.35)'; c.stroke();
 
-    return { cv, ox: pad, oy: w * 0.8 + pad };
+    return { cv, ox: pad, oy: w * 0.65 + pad };
   }
 
   function ensureSprites() {
     if (spriteS === S && foreSprite) return;
     spriteS = S;
-    foreSprite = makeWingSprite(S * 0.62, S * 0.16, false, 11);
-    hindSprite = makeWingSprite(S * 0.58, S * 0.2, true, 29);
+    foreSprite = makeWingSprite(S * 0.6, S * 0.2, false, 11);
+    hindSprite = makeWingSprite(S * 0.56, S * 0.21, true, 29);
   }
 
   // draw a pre-rendered wing; sx = length scale (foreshortening when beating)
@@ -460,13 +474,12 @@
     ensureSprites();
     const L = S;
     const groundY = L * 0.22;
-    // far-side wings (behind body), held out flat → seen nearly edge-on
-    const flick = Math.sin(clap * Math.PI) * 0.08;
-    ctx.save(); ctx.translate(L * 0.04, -L * 0.045); ctx.rotate(-0.12 - flick);
-    drawWingSprite(foreSprite, 0.9, 0.35, 0.8); ctx.restore();
-    ctx.save(); ctx.translate(-L * 0.01, -L * 0.04); ctx.rotate(Math.PI + 0.14 + flick);
-    drawWingSprite(hindSprite, 0.85, -0.35, 0.8); ctx.restore();
-
+    // folded wings, held together above the abdomen (seen from the side)
+    const open = Math.sin(clap * Math.PI) * 0.22;   // occasional slow open-close
+    const wingRoot = () => { ctx.translate(-L * 0.005, -L * 0.04); };
+    // far pair (behind body), a touch lower and darker
+    ctx.save(); wingRoot(); ctx.rotate(Math.PI + 0.2 + open * 0.5);
+    ctx.save(); ctx.filter = 'brightness(0.7)'; drawWingSprite(hindSprite, 1, -1, 0.95); ctx.restore(); ctx.restore();
     // legs
     ctx.strokeStyle = '#1a1410';
     ctx.lineWidth = Math.max(0.6, L / 120);
@@ -493,11 +506,11 @@
 
     drawThorax(L, true);
 
-    // near-side wings (in front)
-    ctx.save(); ctx.translate(L * 0.04, -L * 0.05); ctx.rotate(-0.05 + flick);
-    drawWingSprite(foreSprite, 0.95, 0.4, 0.95); ctx.restore();
-    ctx.save(); ctx.translate(-L * 0.01, -L * 0.045); ctx.rotate(Math.PI + 0.06 - flick);
-    drawWingSprite(hindSprite, 0.9, -0.4, 0.95); ctx.restore();
+    // near pair (in front), lifted slightly and fanning open a little when it claps
+    ctx.save(); wingRoot(); ctx.rotate(Math.PI + 0.28 + open);
+    drawWingSprite(foreSprite, 1, -1, 0.97); ctx.restore();
+    ctx.save(); wingRoot(); ctx.rotate(Math.PI + 0.36 + open * 1.4);
+    drawWingSprite(foreSprite, 0.98, -1, 0.97); ctx.restore();
 
     // head: big blue eye
     drawEyeDome(L * 0.115, -L * 0.005, L * 0.045, L * 0.048);
