@@ -105,21 +105,21 @@ a { color: inherit; text-decoration: none; }
 }
 
 .card {
-  --ar: 0.8;                        /* set per file from its real shape (width / height) */
   position: absolute;
   left: 0;
   top: 0;
-  /* each card keeps the file's own shape: tall, wide or square */
-  width: min(calc(var(--ch) * var(--ar)), calc(var(--cw) * 1.45));
-  aspect-ratio: var(--ar);
+  /* every card is the same 4:5 frame (1080 × 1350) */
+  width: var(--cw);
+  aspect-ratio: 4 / 5;
   transform-origin: 0 0;            /* every page hinges on the same spine */
   backface-visibility: visible;
   overflow: hidden;
   border-radius: calc(var(--cw) * 0.025);
-  background: #e9e6df;
+  background: #f1eee7;
 }
+/* the whole image / video is shown at its original shape, centred in the frame */
 .card img, .card video {
-  width: 100%; height: 100%; object-fit: cover; display: block;
+  width: 100%; height: 100%; object-fit: contain; display: block;
   user-select: none; -webkit-user-drag: none;
   /* film / instant-photo look, applied to anything you add */
   filter: contrast(1.06) saturate(0.86) sepia(0.12) brightness(1.03);

@@ -43,10 +43,6 @@ for (let i = 0; i < CARD_COUNT; i++) {
     media.draggable = false;
     media.decoding = 'async';
   }
-  // give the card the exact shape of the file once we know its size
-  const setShape = (w, h) => { if (w && h) card.style.setProperty('--ar', (w / h).toFixed(4)); };
-  if (media.tagName === 'VIDEO') media.addEventListener('loadedmetadata', () => setShape(media.videoWidth, media.videoHeight));
-  else media.addEventListener('load', () => setShape(media.naturalWidth, media.naturalHeight));
   card.appendChild(media);
   rotor.appendChild(card);
   if (media.play) media.play().catch(() => {});
